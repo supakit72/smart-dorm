@@ -2,7 +2,7 @@ import React from 'react';
 
 type AlertModalProps = {
   isOpen: boolean;
-  type: 'confirm' | 'success';
+  type: 'confirm' | 'success' | 'error';
   title: string;
   message: string;
   onConfirm?: () => void;
@@ -41,6 +41,19 @@ export default function AlertModal({ isOpen, type, title, message, onConfirm, on
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>
             <p className="text-sm text-slate-500">{message}</p>
+          </>
+        )}
+
+        {type === 'error' && (
+          <>
+            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>
+            <p className="text-sm text-slate-500 mb-6">{message}</p>
+            <button onClick={onCancel} className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition-colors">
+              ปิด
+            </button>
           </>
         )}
         

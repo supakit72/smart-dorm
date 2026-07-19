@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import AlertModal from '@/components/AlertModal';
 
-type AlertType = 'confirm' | 'success';
+type AlertType = 'confirm' | 'success' | 'error';
 
 interface AlertContextProps {
   showAlert: (type: AlertType, title: string, message: string) => void;

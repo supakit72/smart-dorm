@@ -139,7 +139,7 @@ function InvoiceEditorContent() {
         }
       } catch (err: any) {
         console.error("Init Error:", err);
-        showAlert('error', 'ไม่สามารถโหลดข้อมูลได้');
+        showAlert('error', 'เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลได้');
       } finally {
         setLoading(false);
       }
