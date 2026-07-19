@@ -241,7 +241,7 @@ export default function RoomsManagementPage() {
     try {
       const { error } = await supabase.from('rooms').delete().eq('room_id', roomId);
       if (error) throw error;
-      
+
       showAlert('success', 'ลบห้องพักสำเร็จ', 'ลบข้อมูลห้องพักออกจากระบบแล้ว');
       fetchRooms();
     } catch (err: any) {
@@ -279,7 +279,7 @@ export default function RoomsManagementPage() {
       const { error: contractError } = await supabase.from('contracts').insert([
         {
           room_id: selectedRoomForContract.room_id,
-          tenant_id: selectedUser?.user_uid,
+          tenant_id: selectedUser?.user_id,
           tenant_uid: selectedUser?.user_uid,
           start_date: startDate,
           end_date: endDate,
@@ -356,7 +356,7 @@ export default function RoomsManagementPage() {
 
       setIsRoomDetailsModalOpen(false);
       fetchRooms();
-      
+
       showAlert('success', 'ยกเลิกสัญญาสำเร็จ', 'สัญญาเช่าถูกยกเลิกและห้องถูกเปลี่ยนเป็นสถานะว่างแล้ว');
     } catch (err: any) {
       alert('เกิดข้อผิดพลาด: ' + err.message);
