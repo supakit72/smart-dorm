@@ -84,8 +84,19 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4 font-sans text-slate-900">
-      <div className="max-w-xl w-full bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100 my-8">
-        <div className="p-8 sm:p-10">
+      <div className="max-w-xl w-full bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100 my-8 relative">
+        
+        <button
+          onClick={() => router.back()}
+          className="absolute top-6 left-6 md:top-8 md:left-8 flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm"
+          type="button"
+          title="ย้อนกลับ"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          <span className="hidden sm:inline">ย้อนกลับ</span>
+        </button>
+
+        <div className="p-8 sm:p-10 pt-16 sm:pt-20">
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">สมัครสมาชิกผู้เช่า</h1>
             <p className="text-sm font-medium text-slate-500 mt-2">กรอกข้อมูลเพื่อลงทะเบียนเข้าใช้งานระบบ Smart Dorm</p>
