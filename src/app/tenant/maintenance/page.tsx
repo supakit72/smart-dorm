@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/backend/lib/supabase';
 
 export default function MaintenanceRequest() {
     const [issueDetails, setIssueDetails] = useState('');

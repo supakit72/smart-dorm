@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/backend/lib/supabase';
 import InvoiceDocument from '@/components/InvoiceDocument';
 
 const getMeterCycle = (issueDateStr: string, meterDay: number) => {

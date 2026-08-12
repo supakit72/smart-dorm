@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/backend/lib/supabase';
 import { useAlert } from '@/contexts/AlertContext';
 
 export default function ForceChangePasswordPage() {

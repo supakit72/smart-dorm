@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
 import { useAlert } from '@/contexts/AlertContext';
-import { adminResetUserPassword } from '@/actions/authActions';
+import { adminResetUserPassword } from '@/backend/actions/authActions';
 
 export default function UsersManagementPage() {
   const router = useRouter();

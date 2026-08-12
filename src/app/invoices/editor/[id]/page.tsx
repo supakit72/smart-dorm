@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
 import { useAlert } from '@/contexts/AlertContext';
 import Link from 'next/link';

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/backend/lib/supabase';
 
 export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
