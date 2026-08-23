@@ -77,6 +77,13 @@ export default function ReportsPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // State for toggling % and Absolute Diff on mobile
+  const [toggledCells, setToggledCells] = useState<{ [key: string]: boolean }>({});
+  
+  const handleToggleCell = (key: string) => {
+    setToggledCells(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -186,7 +193,7 @@ export default function ReportsPage() {
   const maxRevenue = reportData.length > 0 ? Math.max(...reportData.map(d => d.totalRevenue)) : 1;
 
   // Render Change Indicator Function (MoM Percentage Change)
-  const renderChangeIndicator = (current: number, prev: number | null | undefined) => {
+  const renderChangeIndicator = (current: number, prev: number | null | undefined, cellKey: string) => {
     if (prev === null || prev === undefined) return null; // No previous month to compare
     let change = 0;
     const diff = current - prev;
@@ -201,23 +208,27 @@ export default function ReportsPage() {
     if (change === 0) return <span className="text-slate-400 text-[10px] mt-0.5">-</span>;
 
     const formattedDiff = Math.abs(diff).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-    const titleText = diff > 0 ? `เพิ่มขึ้น ${formattedDiff} บาท` : `ลดลง ${formattedDiff} บาท`;
+    const isToggled = !!toggledCells[cellKey];
+    
+    const displayText = isToggled ? `${formattedDiff} ฿` : `${Math.abs(change).toFixed(1)}%`;
+    const colorClass = change > 0 
+      ? (isToggled ? 'text-green-700 bg-green-100' : 'text-green-500 hover:text-green-600') 
+      : (isToggled ? 'text-red-700 bg-red-100' : 'text-red-500 hover:text-red-600');
+    
+    const arrowIcon = change > 0 
+      ? <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
+      : <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>;
 
-    if (change > 0) {
-      return (
-        <div className="flex items-center text-green-500 text-[10.5px] font-bold mt-0.5 cursor-help" title={titleText}>
-          <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
-          {change.toFixed(1)}%
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center text-red-500 text-[10.5px] font-bold mt-0.5 cursor-help" title={titleText}>
-          <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-          {Math.abs(change).toFixed(1)}%
-        </div>
-      );
-    }
+    return (
+      <div 
+        onClick={() => handleToggleCell(cellKey)}
+        className={`flex items-center text-[10.5px] font-bold mt-0.5 cursor-pointer px-1.5 py-0.5 rounded transition-colors duration-200 select-none active:scale-95 ${colorClass}`}
+        title="คลิกเพื่อสลับดูจำนวนเงิน/เปอร์เซ็นต์"
+      >
+        {arrowIcon}
+        {displayText}
+      </div>
+    );
   };
 
   return (
@@ -429,31 +440,31 @@ export default function ReportsPage() {
                             <td className="px-6 py-4 text-right whitespace-nowrap">
                               <div className="flex flex-col items-end">
                                 <span className="text-slate-600 font-medium">{row.rent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                {renderChangeIndicator(row.rent, prevRow?.rent)}
+                                {renderChangeIndicator(row.rent, prevRow?.rent, `${row.month}-rent`)}
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right whitespace-nowrap">
                               <div className="flex flex-col items-end">
                                 <span className="text-cyan-600 font-medium">{row.water.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                {renderChangeIndicator(row.water, prevRow?.water)}
+                                {renderChangeIndicator(row.water, prevRow?.water, `${row.month}-water`)}
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right whitespace-nowrap">
                               <div className="flex flex-col items-end">
                                 <span className="text-amber-500 font-medium">{row.electric.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                {renderChangeIndicator(row.electric, prevRow?.electric)}
+                                {renderChangeIndicator(row.electric, prevRow?.electric, `${row.month}-electric`)}
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right whitespace-nowrap">
                               <div className="flex flex-col items-end">
                                 <span className="text-slate-600 font-medium">{row.other.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                {renderChangeIndicator(row.other, prevRow?.other)}
+                                {renderChangeIndicator(row.other, prevRow?.other, `${row.month}-other`)}
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right whitespace-nowrap bg-blue-50/10">
                               <div className="flex flex-col items-end">
                                 <span className="font-bold text-blue-600 text-base">{row.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿</span>
-                                {renderChangeIndicator(row.totalRevenue, prevRow?.totalRevenue)}
+                                {renderChangeIndicator(row.totalRevenue, prevRow?.totalRevenue, `${row.month}-total`)}
                               </div>
                             </td>
                           </tr>
