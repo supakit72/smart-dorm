@@ -12,11 +12,11 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  
+
   const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -64,7 +64,7 @@ export default function RegisterPage() {
         }
 
         setSuccessMsg('สมัครสมาชิกสำเร็จ! ระบบกำลังพาคุณไปยังหน้าเข้าสู่ระบบ...');
-        
+
         // พาไปหน้า Login หลังจากสมัครเสร็จสิ้น 2 วินาที
         setTimeout(() => {
           router.push('/login');
@@ -85,7 +85,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4 font-sans text-slate-900">
       <div className="max-w-xl w-full bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100 my-8 relative">
-        
+
         <button
           onClick={() => router.back()}
           className="absolute top-6 left-6 md:top-8 md:left-8 flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm"
@@ -101,7 +101,7 @@ export default function RegisterPage() {
             <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">สมัครสมาชิกผู้เช่า</h1>
             <p className="text-sm font-medium text-slate-500 mt-2">กรอกข้อมูลเพื่อลงทะเบียนเข้าใช้งานระบบ Smart Dorm</p>
           </div>
-          
+
           {errorMsg && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-medium flex items-start gap-3">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -110,10 +110,10 @@ export default function RegisterPage() {
           )}
 
           {successMsg && (
-             <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-sm font-medium flex items-start gap-3">
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-               <span>{successMsg}</span>
-             </div>
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-sm font-medium flex items-start gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span>{successMsg}</span>
+            </div>
           )}
 
           <form onSubmit={handleRegister} className="space-y-5">
@@ -213,7 +213,7 @@ export default function RegisterPage() {
                 'สมัครสมาชิก'
               )}
             </button>
-            
+
             <div className="text-center mt-6">
               <span className="text-slate-500 text-sm font-medium">มีบัญชีอยู่แล้ว? </span>
               <Link href="/login" className="text-blue-600 font-bold text-sm hover:underline">

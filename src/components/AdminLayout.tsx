@@ -77,6 +77,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
             {!isCollapsed && <span className="font-medium truncate">ภาพรวม</span>}
           </Link>
+          <Link href="/reports" onClick={handleLinkClick} className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl transition-all ${pathname === '/reports' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/50' : 'hover:bg-slate-800 hover:text-white'}`} title="รายงานสรุป">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            {!isCollapsed && <span className="font-medium truncate">รายงานสรุป</span>}
+          </Link>
 
           <div className={`pt-6 pb-2 ${isCollapsed ? 'px-0 text-center' : 'px-2'}`}>
             <p className={`text-xs font-bold text-slate-500 uppercase tracking-wider ${isCollapsed ? 'text-[10px]' : ''}`}>
@@ -158,7 +162,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Desktop Top Header (Hidden on Mobile? No, just keep it, or maybe simplify padding) */}
         <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-6 sm:px-8 z-10 sticky top-0 shadow-sm shrink-0">
            <h2 className="text-base sm:text-lg font-bold text-slate-800 tracking-tight truncate mr-4">
-             {pathname === '/rooms' ? 'จัดการห้องพัก (Room Management)' : pathname === '/room-types' ? 'จัดการประเภทห้องพัก (Room Types)' : pathname === '/invoices' || pathname.startsWith('/invoices/editor') ? 'จัดการบิลค่าเช่า (Invoices)' : pathname === '/users' ? 'จัดการผู้ใช้งาน (Users)' : pathname === '/settings' ? 'ตั้งค่าระบบ (Settings)' : pathname === '/profile' ? 'โปรไฟล์ส่วนตัว (Profile)' : 'ภาพรวมระบบ (Dashboard)'}
+             {pathname === '/rooms' ? 'จัดการห้องพัก (Room Management)' : pathname === '/room-types' ? 'ประเภทห้องพัก (Room Types)' : pathname === '/invoices' || pathname.startsWith('/invoices/editor') ? 'จัดการบิลค่าเช่า (Invoices)' : pathname === '/users' ? 'จัดการผู้ใช้งาน (Users)' : pathname === '/settings' ? 'ตั้งค่าระบบ (Settings)' : pathname === '/profile' ? 'โปรไฟล์ส่วนตัว (Profile)' : pathname === '/reports' ? 'รายงานสรุปรายได้ (Reports)' : 'ภาพรวม (Dashboard)'}
            </h2>
            <div className="text-xs sm:text-sm font-medium text-slate-500 whitespace-nowrap hidden sm:block">
              {new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}
