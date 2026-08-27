@@ -42,6 +42,7 @@ export default function RoomsManagementPage() {
   const [editFloor, setEditFloor] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editRoomTypeId, setEditRoomTypeId] = useState('');
+  const [editRoomStatus, setEditRoomStatus] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   // Contract Modal states
@@ -177,6 +178,7 @@ export default function RoomsManagementPage() {
     setEditFloor(String(room.floor || ''));
     setEditPrice(String(room.price_per_month || ''));
     setEditRoomTypeId(room.room_type_id ? String(room.room_type_id) : '');
+    setEditRoomStatus(room.status || '');
     setIsEditModalOpen(true);
   };
 
@@ -184,14 +186,31 @@ export default function RoomsManagementPage() {
     if (!editRoomId) return;
     try {
       setIsEditing(true);
+
+      // Backend validation: Fetch current status
+      const { data: currentRoom, error: fetchError } = await supabase
+        .from('rooms')
+        .select('status')
+        .eq('room_id', editRoomId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+
+      const isOccupied = currentRoom?.status === 'occupied' || currentRoom?.status === 'มีผู้เช่า';
+      const updatePayload: any = {
+        room_number: editRoomNumber,
+        floor: editFloor,
+        room_type_id: editRoomTypeId ? Number(editRoomTypeId) : null
+      };
+
+      // Only update price if room is not occupied
+      if (!isOccupied) {
+        updatePayload.price_per_month = Number(editPrice);
+      }
+
       const { error } = await supabase
         .from('rooms')
-        .update({
-          room_number: editRoomNumber,
-          floor: editFloor,
-          price_per_month: Number(editPrice),
-          room_type_id: editRoomTypeId ? Number(editRoomTypeId) : null
-        })
+        .update(updatePayload)
         .eq('room_id', editRoomId);
 
       if (error) throw error;
@@ -1073,12 +1092,22 @@ export default function RoomsManagementPage() {
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">ราคาต่อเดือน (บาท)</label>
                   <input
                     type="number"
-                    required
+                    required={editRoomStatus !== 'occupied' && editRoomStatus !== 'มีผู้เช่า'}
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 outline-none transition-all bg-slate-50 focus:bg-white"
+                    disabled={editRoomStatus === 'occupied' || editRoomStatus === 'มีผู้เช่า'}
+                    className={`w-full px-4 py-3 rounded-xl border focus:ring-4 outline-none transition-all ${
+                      editRoomStatus === 'occupied' || editRoomStatus === 'มีผู้เช่า'
+                      ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' 
+                      : 'border-slate-200 focus:border-amber-500 focus:ring-amber-500/10 bg-slate-50 focus:bg-white'
+                    }`}
                     min="0"
                   />
+                  {(editRoomStatus === 'occupied' || editRoomStatus === 'มีผู้เช่า') && (
+                    <p className="mt-1.5 text-xs text-rose-500 font-medium">
+                      🔒 ไม่สามารถเปลี่ยนราคาได้เนื่องจากห้องนี้มีผู้เช่าอยู่
+                    </p>
+                  )}
                 </div>
               </div>
 

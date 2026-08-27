@@ -79,7 +79,7 @@ export default function ReportsPage() {
 
   // State for toggling % and Absolute Diff on mobile
   const [toggledCells, setToggledCells] = useState<{ [key: string]: boolean }>({});
-  
+
   const handleToggleCell = (key: string) => {
     setToggledCells(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -209,18 +209,18 @@ export default function ReportsPage() {
 
     const formattedDiff = Math.abs(diff).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     const isToggled = !!toggledCells[cellKey];
-    
+
     const displayText = isToggled ? `${formattedDiff} ฿` : `${Math.abs(change).toFixed(1)}%`;
-    const colorClass = change > 0 
-      ? (isToggled ? 'text-green-700 bg-green-100' : 'text-green-500 hover:text-green-600') 
+    const colorClass = change > 0
+      ? (isToggled ? 'text-green-700 bg-green-100' : 'text-green-500 hover:text-green-600')
       : (isToggled ? 'text-red-700 bg-red-100' : 'text-red-500 hover:text-red-600');
-    
-    const arrowIcon = change > 0 
+
+    const arrowIcon = change > 0
       ? <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
       : <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>;
 
     return (
-      <div 
+      <div
         onClick={() => handleToggleCell(cellKey)}
         className={`flex items-center text-[10.5px] font-bold mt-0.5 cursor-pointer px-1.5 py-0.5 rounded transition-colors duration-200 select-none active:scale-95 ${colorClass}`}
         title="คลิกเพื่อสลับดูจำนวนเงิน/เปอร์เซ็นต์"
