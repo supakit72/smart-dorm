@@ -25,7 +25,10 @@ export default function SettingsPage() {
     invoice_footer_text: '',
     invoice_signature_name: '',
     show_tax_column: true,
-    meter_reading_day: 20
+    meter_reading_day: 20,
+    water_rate: 0,
+    electric_rate: 0,
+    due_day: 5
   });
 
   useEffect(() => {
@@ -65,7 +68,10 @@ export default function SettingsPage() {
           invoice_footer_text: data.invoice_footer_text || '',
           invoice_signature_name: data.invoice_signature_name || '',
           show_tax_column: data.show_tax_column !== undefined ? data.show_tax_column : true,
-          meter_reading_day: data.meter_reading_day || 20
+          meter_reading_day: data.meter_reading_day || 20,
+          water_rate: data.water_rate || 0,
+          electric_rate: data.electric_rate || 0,
+          due_day: data.due_day || 5
         });
         if (data.updated_at) {
           const d = new Date(data.updated_at);
@@ -282,6 +288,46 @@ export default function SettingsPage() {
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">%</span>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">สำหรับคำนวณภาษีในหน้าสร้างบิลค่าเช่า</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">เรทค่าน้ำ (บาท/หน่วย)</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.water_rate}
+                    onChange={(e) => setFormData({...formData, water_rate: Number(e.target.value)})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">เรทค่าไฟ (บาท/หน่วย)</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.electric_rate}
+                    onChange={(e) => setFormData({...formData, electric_rate: Number(e.target.value)})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">กำหนดชำระเงิน (วันที่ของเดือนถัดไป)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max="31"
+                      value={formData.due_day}
+                      onChange={(e) => setFormData({...formData, due_day: Number(e.target.value)})}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">ของเดือน</span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">ใช้คำนวณวันครบกำหนดชำระเงินในรอบบิลใหม่อัตโนมัติ</p>
                 </div>
               </div>
             </div>

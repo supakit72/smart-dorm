@@ -475,6 +475,32 @@ export default function RoomsManagementPage() {
     return `${day}/${month}/${year}`;
   };
 
+  const handleAddRoomTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setNewRoomTypeId(val);
+    if (val) {
+      const selectedType = roomTypes.find(rt => String(rt.id) === val);
+      if (selectedType && selectedType.base_price) {
+        setNewPrice(String(selectedType.base_price));
+      }
+    }
+  };
+
+  const handleEditRoomTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setEditRoomTypeId(val);
+    if (val && editRoomStatus !== 'occupied' && editRoomStatus !== 'มีผู้เช่า') {
+      const selectedType = roomTypes.find(rt => String(rt.id) === val);
+      if (selectedType && selectedType.base_price) {
+        setEditPrice(String(selectedType.base_price));
+      }
+    }
+  };
+
+  // Duplicate room validation
+  const isNewRoomDuplicate = newRoomNumber.trim() !== '' && rooms.some(r => String(r.room_number).toLowerCase() === newRoomNumber.trim().toLowerCase());
+  const isEditRoomDuplicate = editRoomNumber.trim() !== '' && rooms.some(r => String(r.room_number).toLowerCase() === editRoomNumber.trim().toLowerCase() && r.room_id !== editRoomId);
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -695,9 +721,19 @@ export default function RoomsManagementPage() {
                     required
                     value={newRoomNumber}
                     onChange={(e) => setNewRoomNumber(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-slate-50 focus:bg-white"
+                    className={`w-full px-4 py-3 rounded-xl border focus:ring-4 outline-none transition-all bg-slate-50 focus:bg-white ${
+                      isNewRoomDuplicate 
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10 text-red-600' 
+                        : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500/10'
+                    }`}
                     placeholder="เช่น 101, 201"
                   />
+                  {isNewRoomDuplicate && (
+                    <p className="text-red-500 text-sm mt-1.5 flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                      หมายเลขห้องนี้มีในระบบแล้ว กรุณาใช้หมายเลขอื่น
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -716,7 +752,7 @@ export default function RoomsManagementPage() {
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">ประเภทห้องพัก</label>
                   <select
                     value={newRoomTypeId}
-                    onChange={(e) => setNewRoomTypeId(e.target.value)}
+                    onChange={handleAddRoomTypeChange}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-slate-50 focus:bg-white"
                   >
                     <option value="">-- ไม่ระบุ --</option>
@@ -750,8 +786,8 @@ export default function RoomsManagementPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isAdding}
-                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-md disabled:bg-blue-400 disabled:shadow-none flex justify-center items-center"
+                  disabled={isAdding || isNewRoomDuplicate}
+                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-md disabled:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex justify-center items-center"
                 >
                   {isAdding ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -1059,8 +1095,18 @@ export default function RoomsManagementPage() {
                     required
                     value={editRoomNumber}
                     onChange={(e) => setEditRoomNumber(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 outline-none transition-all bg-slate-50 focus:bg-white"
+                    className={`w-full px-4 py-3 rounded-xl border focus:ring-4 outline-none transition-all bg-slate-50 focus:bg-white ${
+                      isEditRoomDuplicate 
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10 text-red-600' 
+                        : 'border-slate-200 focus:border-amber-500 focus:ring-amber-500/10'
+                    }`}
                   />
+                  {isEditRoomDuplicate && (
+                    <p className="text-red-500 text-sm mt-1.5 flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                      หมายเลขห้องนี้มีในระบบแล้ว กรุณาใช้หมายเลขอื่น
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1078,7 +1124,7 @@ export default function RoomsManagementPage() {
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">ประเภทห้องพัก</label>
                   <select
                     value={editRoomTypeId}
-                    onChange={(e) => setEditRoomTypeId(e.target.value)}
+                    onChange={handleEditRoomTypeChange}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 outline-none transition-all bg-slate-50 focus:bg-white"
                   >
                     <option value="">-- ไม่ระบุ --</option>
@@ -1121,8 +1167,8 @@ export default function RoomsManagementPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isEditing}
-                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors shadow-md disabled:bg-amber-400 flex justify-center items-center"
+                  disabled={isEditing || isEditRoomDuplicate}
+                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors shadow-md disabled:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex justify-center items-center"
                 >
                   {isEditing ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

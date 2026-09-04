@@ -79,6 +79,28 @@ function InvoiceEditorContent() {
         const { data: settingsData } = await supabase.from('dorm_settings').select('*').limit(1).single();
         if (settingsData) {
           setDormSettings(settingsData);
+          if (isNew) {
+            if (settingsData.water_rate !== null && settingsData.water_rate !== undefined) {
+              setWaterRate(settingsData.water_rate);
+            }
+            if (settingsData.electric_rate !== null && settingsData.electric_rate !== undefined) {
+              setElectricRate(settingsData.electric_rate);
+            }
+            if (settingsData.due_day !== null && settingsData.due_day !== undefined) {
+              const now = new Date();
+              let nextMonth = now.getMonth() + 1;
+              let nextYear = now.getFullYear();
+              if (nextMonth > 11) {
+                nextMonth = 0;
+                nextYear++;
+              }
+              const due = new Date(nextYear, nextMonth, settingsData.due_day);
+              const yyyy = due.getFullYear();
+              const mm = String(due.getMonth() + 1).padStart(2, '0');
+              const dd = String(due.getDate()).padStart(2, '0');
+              setDueDate(`${yyyy}-${mm}-${dd}`);
+            }
+          }
         }
 
         // 2. Fetch Active Contracts

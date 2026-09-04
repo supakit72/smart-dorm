@@ -17,11 +17,12 @@ export default function RoomTypesManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [selectedType, setSelectedType] = useState<any>(null);
-  
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
-    description: ''
+    description: '',
+    base_price: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,7 +55,7 @@ export default function RoomTypesManagementPage() {
         .from('room_types')
         .select('*')
         .order('id', { ascending: true });
-        
+
       if (error) throw error;
       setRoomTypes(data || []);
     } catch (err: any) {
@@ -68,14 +69,14 @@ export default function RoomTypesManagementPage() {
   const openAddModal = () => {
     setModalMode('add');
     setSelectedType(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', base_price: '' });
     setIsModalOpen(true);
   };
 
   const openEditModal = (roomType: any) => {
     setModalMode('edit');
     setSelectedType(roomType);
-    setFormData({ name: roomType.name, description: roomType.description || '' });
+    setFormData({ name: roomType.name, description: roomType.description || '', base_price: roomType.base_price?.toString() || '' });
     setIsModalOpen(true);
   };
 
@@ -89,13 +90,13 @@ export default function RoomTypesManagementPage() {
       setIsSubmitting(true);
       if (modalMode === 'add') {
         const { error } = await supabase.from('room_types').insert([
-          { name: formData.name, description: formData.description }
+          { name: formData.name, description: formData.description, base_price: Number(formData.base_price) }
         ]);
         if (error) throw error;
         showAlert('success', 'เพิ่มประเภทห้องสำเร็จ', 'เพิ่มข้อมูลประเภทห้องพักเรียบร้อยแล้ว');
       } else {
         const { error } = await supabase.from('room_types')
-          .update({ name: formData.name, description: formData.description })
+          .update({ name: formData.name, description: formData.description, base_price: Number(formData.base_price) })
           .eq('id', selectedType.id);
         if (error) throw error;
         showAlert('success', 'แก้ไขประเภทห้องสำเร็จ', 'อัปเดตข้อมูลประเภทห้องพักเรียบร้อยแล้ว');
@@ -117,9 +118,9 @@ export default function RoomTypesManagementPage() {
         .select('room_id')
         .eq('room_type_id', id)
         .limit(1);
-        
+
       if (checkError) throw checkError;
-      
+
       if (roomsWithThisType && roomsWithThisType.length > 0) {
         alert('ไม่สามารถลบประเภทห้องพักนี้ได้ เนื่องจากมีห้องพักที่ใช้ประเภทนี้อยู่');
         return;
@@ -127,7 +128,7 @@ export default function RoomTypesManagementPage() {
 
       const { error } = await supabase.from('room_types').delete().eq('id', id);
       if (error) throw error;
-      
+
       showAlert('success', 'ลบประเภทห้องพักสำเร็จ', 'ลบข้อมูลประเภทห้องพักออกจากระบบแล้ว');
       fetchRoomTypes();
     } catch (err: any) {
@@ -173,6 +174,7 @@ export default function RoomTypesManagementPage() {
                   <tr>
                     <th className="px-6 py-4 whitespace-nowrap w-24">ID</th>
                     <th className="px-6 py-4 whitespace-nowrap w-64">ชื่อประเภทห้องพัก</th>
+                    <th className="px-6 py-4 whitespace-nowrap w-32">ราคามาตรฐาน</th>
                     <th className="px-6 py-4 whitespace-nowrap">รายละเอียด</th>
                     <th className="px-6 py-4 whitespace-nowrap text-center w-32">จัดการ</th>
                   </tr>
@@ -187,6 +189,7 @@ export default function RoomTypesManagementPage() {
                       <tr key={type.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-500">#{type.id}</td>
                         <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-800">{type.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-blue-600">{Number(type.base_price || 0).toLocaleString()} ฿</td>
                         <td className="px-6 py-4 text-slate-600">{type.description || '-'}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -231,14 +234,14 @@ export default function RoomTypesManagementPage() {
                 </div>
                 {modalMode === 'add' ? 'เพิ่มประเภทห้องพัก' : 'แก้ไขประเภทห้องพัก'}
               </h3>
-              <button 
+              <button
                 onClick={closeModal}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">ชื่อประเภทห้องพัก <span className="text-red-500">*</span></label>
@@ -252,6 +255,18 @@ export default function RoomTypesManagementPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">ราคามาตรฐาน (บาท/เดือน) <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={formData.base_price}
+                  onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
+                  placeholder="เช่น 4500"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm font-medium"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">รายละเอียด (ไม่บังคับ)</label>
                 <textarea
                   value={formData.description}
@@ -261,16 +276,15 @@ export default function RoomTypesManagementPage() {
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm font-medium resize-none"
                 ></textarea>
               </div>
-              
+
               <div className="pt-2">
                 <button
                   type="submit"
                   disabled={isSubmitting || !formData.name}
-                  className={`w-full py-3 text-white font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
-                    modalMode === 'add' 
-                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20' 
+                  className={`w-full py-3 text-white font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${modalMode === 'add'
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20'
                       : 'bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-500/20'
-                  }`}
+                    }`}
                 >
                   {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
                 </button>
