@@ -28,7 +28,9 @@ export default function SettingsPage() {
     meter_reading_day: 20,
     water_rate: 0,
     electric_rate: 0,
-    due_day: 5
+    due_day: 5,
+    max_booking_days: 7,
+    unavailable_dates: [] as string[]
   });
 
   useEffect(() => {
@@ -71,7 +73,9 @@ export default function SettingsPage() {
           meter_reading_day: data.meter_reading_day || 20,
           water_rate: data.water_rate || 0,
           electric_rate: data.electric_rate || 0,
-          due_day: data.due_day || 5
+          due_day: data.due_day || 5,
+          max_booking_days: data.max_booking_days ?? 7,
+          unavailable_dates: data.unavailable_dates || []
         });
         if (data.updated_at) {
           const d = new Date(data.updated_at);
@@ -83,6 +87,26 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddDate = () => {
+    const input = document.getElementById('new_unavailable_date') as HTMLInputElement;
+    if (input && input.value) {
+      if (!formData.unavailable_dates.includes(input.value)) {
+        setFormData({
+          ...formData,
+          unavailable_dates: [...formData.unavailable_dates, input.value].sort()
+        });
+      }
+      input.value = '';
+    }
+  };
+
+  const handleRemoveDate = (dateToRemove: string) => {
+    setFormData({
+      ...formData,
+      unavailable_dates: formData.unavailable_dates.filter(d => d !== dateToRemove)
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -381,6 +405,66 @@ export default function SettingsPage() {
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                   </label>
                   <span className="text-sm font-bold text-slate-700">แสดงคอลัมน์ภาษี (VAT) ในตารางพิมพ์บิล</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. ตั้งค่าการจองห้องพัก */}
+            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/60 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-2 h-full bg-rose-500"></div>
+              <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <span className="text-xl">📆</span> ตั้งค่าการจองห้องพัก (Room Booking)
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">จองล่วงหน้าได้สูงสุด (วัน)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={formData.max_booking_days}
+                      onChange={(e) => setFormData({...formData, max_booking_days: parseInt(e.target.value) || 0})}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">จำนวนวันที่อนุญาตให้ลูกค้าเลือกล่วงหน้าจากวันปัจจุบัน</p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">วันหยุด / วันที่ไม่เปิดรับนัดหมาย</label>
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="date"
+                      id="new_unavailable_date"
+                      className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddDate}
+                      className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-xl transition-colors shrink-0"
+                    >
+                      เพิ่มวันหยุด
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.unavailable_dates.length === 0 ? (
+                      <span className="text-sm text-slate-400">ยังไม่มีการตั้งค่าวันหยุด</span>
+                    ) : (
+                      formData.unavailable_dates.map(date => (
+                        <div key={date} className="bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 flex items-center gap-2 text-sm text-slate-700 font-medium">
+                          {new Date(date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDate(date)}
+                            className="text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

@@ -43,6 +43,7 @@ export default function TenantDashboard() {
     const [isFullInvoiceModalOpen, setIsFullInvoiceModalOpen] = useState(false);
     const [fullInvoiceData, setFullInvoiceData] = useState<any | null>(null);
     const [hasRoom, setHasRoom] = useState<boolean>(true);
+    const [activeBooking, setActiveBooking] = useState<any | null>(null);
     const [userName, setUserName] = useState<string>('');
 
     // อ้างอิงถึง input file ที่ซ่อนไว้
@@ -82,9 +83,26 @@ export default function TenantDashboard() {
                 // ไม่มีสัญญาเช่า
                 setHasRoom(false);
                 setInvoice(null);
+                
+                // Fetch active booking instead
+                const { data: bookingData } = await supabase
+                    .from('room_bookings')
+                    .select('*, rooms(room_number)')
+                    .eq('user_id', userRecord.user_id)
+                    .in('status', ['pending', 'confirmed'])
+                    .limit(1)
+                    .single();
+                    
+                if (bookingData) {
+                    setActiveBooking(bookingData);
+                } else {
+                    setActiveBooking(null);
+                }
+                
                 return;
             } else {
                 setHasRoom(true);
+                setActiveBooking(null);
             }
 
             // 3. หาบิลทั้งหมดจากตาราง invoices โดยตรง (ตัดบิลร่างทิ้ง) เรียงจากใหม่ไปเก่า
@@ -448,15 +466,50 @@ export default function TenantDashboard() {
 
             <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
                 {!hasRoom ? (
-                    <section className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-10 animate-in fade-in zoom-in-95">
-                        <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mb-6 border border-amber-100 shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/><circle cx="12" cy="8" r="2"/></svg>
-                        </div>
-                        <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-3">ยังไม่มีข้อมูลห้องพัก</h2>
-                        <p className="text-slate-500 text-base max-w-md">
-                            คุณยังไม่มีข้อมูลห้องพักในระบบ กรุณาติดต่อเจ้าของหอพักเพื่อเพิ่มข้อมูลเข้าห้องพัก และทำสัญญาเช่าให้เรียบร้อย
-                        </p>
-                    </section>
+                    activeBooking ? (
+                        <section className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-10 animate-in fade-in zoom-in-95 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full opacity-60 pointer-events-none"></div>
+                            
+                            <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 border shadow-sm ${activeBooking.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-500' : 'bg-amber-50 border-amber-100 text-amber-500'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                            
+                            <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-6">ข้อมูลนัดหมายดูห้องพัก</h2>
+                            
+                            <div className="w-full max-w-sm bg-slate-50 rounded-2xl p-6 border border-slate-100 text-left space-y-4 mb-2">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">ห้องที่ต้องการนัดดู</span>
+                                    <span className="text-lg font-bold text-slate-700">{activeBooking.rooms?.room_number || '-'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">วันที่นัดหมาย</span>
+                                    <span className="text-lg font-bold text-slate-700">{new Date(activeBooking.appointment_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">สถานะ</span>
+                                    <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-bold border ${activeBooking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                                        {activeBooking.status === 'confirmed' ? 'ยืนยันแล้ว (เจอกันตามวันนัดหมาย)' : 'กำลังดำเนินการ (รอแอดมินตรวจสอบสลิป)'}
+                                    </span>
+                                </div>
+                            </div>
+                        </section>
+                    ) : (
+                        <section className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-10 animate-in fade-in zoom-in-95">
+                            <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mb-6 border border-amber-100 shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/><circle cx="12" cy="8" r="2"/></svg>
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-3">ยังไม่มีข้อมูลห้องพัก</h2>
+                            <p className="text-slate-500 text-base max-w-md mb-8">
+                                คุณยังไม่มีข้อมูลห้องพักในระบบ กรุณาติดต่อเจ้าของหอพักเพื่อเพิ่มข้อมูลเข้าห้องพัก และทำสัญญาเช่าให้เรียบร้อย
+                            </p>
+                            <Link href="/book-room" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                ค้นหาและจองห้องพัก
+                            </Link>
+                        </section>
+                    )
                 ) : (
                     <>
                         {/* Outstanding Balance Card */}
