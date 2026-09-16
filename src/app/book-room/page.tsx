@@ -159,12 +159,12 @@ export default function BookRoomPage() {
         e.preventDefault();
 
         if (!appointmentDate) {
-            showAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณาระบุวันที่ต้องการนัดหมายดูห้อง');
+            showAlert('error', 'ข้อมูลไม่ครบ', 'กรุณาระบุวันที่ต้องการนัดหมายดูห้อง');
             return;
         }
 
         if (!selectedFile) {
-            showAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณาอัปโหลดสลิปมัดจำประกันคิว');
+            showAlert('error', 'ข้อมูลไม่ครบ', 'กรุณาอัปโหลดสลิปมัดจำประกันคิว');
             return;
         }
 
