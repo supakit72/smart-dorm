@@ -406,18 +406,37 @@ export default function InvoicesManagementPage() {
   };
 
   // Get status badge UI
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (invoice: any) => {
+    const status = invoice.status;
+    let badge = null;
+
     if (status === 'paid') {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-bold text-xs border border-emerald-100 uppercase">ชำระแล้ว</span>;
+      badge = <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-bold text-xs border border-emerald-100 uppercase">ชำระแล้ว</span>;
     } else if (status === 'pending') {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-xs border border-blue-100 uppercase">รอตรวจสอบ</span>;
+      badge = <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-xs border border-blue-100 uppercase">รอตรวจสอบ</span>;
     } else if (status === 'draft') {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 uppercase">แบบร่าง</span>;
+      badge = <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 uppercase">แบบร่าง</span>;
     } else if (status === 'rejected') {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 font-bold text-xs border border-orange-100 uppercase">สลิปถูกตีกลับ</span>;
+      badge = <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 font-bold text-xs border border-orange-100 uppercase">สลิปถูกตีกลับ</span>;
     } else {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 font-bold text-xs border border-rose-100 uppercase">รอชำระ</span>;
+      badge = <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 font-bold text-xs border border-rose-100 uppercase">รอชำระ</span>;
     }
+
+    // Determine invoice type note
+    let note = "บิลค่าเช่า";
+    if (Array.isArray(invoice.additional_items)) {
+      const isMoveIn = invoice.additional_items.some((item: any) => item.name && item.name.includes('เงินประกันความเสียหาย'));
+      if (isMoveIn) note = "บิลแรกเข้า (ประกันหอ)";
+    }
+
+    return (
+      <div className="flex flex-col items-start gap-1">
+        {badge}
+        <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+          {note}
+        </span>
+      </div>
+    );
   };
 
   // Date format helper for due_date and standard timestamps
@@ -810,7 +829,7 @@ export default function InvoicesManagementPage() {
                                 {Number(invoice.total_amount).toLocaleString()} ฿
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">
-                                {getStatusBadge(invoice.status)}
+                                {getStatusBadge(invoice)}
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">
                                 <div className="flex items-center justify-center gap-2">

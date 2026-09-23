@@ -27,6 +27,10 @@ export default function BookRoomPage() {
     const [unavailableDates, setUnavailableDates] = useState<string[]>([]);
     const [waterRate, setWaterRate] = useState(0);
     const [electricRate, setElectricRate] = useState(0);
+    const [bookingDepositAmount, setBookingDepositAmount] = useState(0);
+    const [bankName, setBankName] = useState('');
+    const [bankAccountNo, setBankAccountNo] = useState('');
+    const [bankAccountName, setBankAccountName] = useState('');
     const [dateError, setDateError] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +73,7 @@ export default function BookRoomPage() {
             // Fetch settings
             const { data: settingsData } = await supabase
                 .from('dorm_settings')
-                .select('max_booking_days, unavailable_dates, water_rate, electric_rate')
+                .select('max_booking_days, unavailable_dates, water_rate, electric_rate, booking_deposit_amount, bank_name, bank_account_no, bank_account_name')
                 .limit(1)
                 .single();
 
@@ -78,6 +82,10 @@ export default function BookRoomPage() {
                 setUnavailableDates(settingsData.unavailable_dates || []);
                 setWaterRate(settingsData.water_rate || 0);
                 setElectricRate(settingsData.electric_rate || 0);
+                setBookingDepositAmount(settingsData.booking_deposit_amount || 0);
+                setBankName(settingsData.bank_name || '-');
+                setBankAccountNo(settingsData.bank_account_no || '-');
+                setBankAccountName(settingsData.bank_account_name || '-');
             }
 
             // Fetch available rooms
@@ -348,12 +356,27 @@ export default function BookRoomPage() {
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                                     </div>
                                     <div className="text-sm font-medium text-amber-800 leading-relaxed">
-                                        <strong className="block text-amber-900 mb-1">เงื่อนไขการมัดจำประกันคิว:</strong>
-                                        เงินมัดจำนี้เพื่อจองคิวดูห้อง <br />
-                                        - หากยกเลิก<span className="font-bold">ขอสงวนสิทธิ์ไม่คืนเงินมัดจำ</span><br />
-                                        - หากท่านมาตามนัดและไม่ทำสัญญา <span className="font-bold">จะได้รับเงินคืนเต็มจำนวน</span><br />
-                                        - หากตกลงทำสัญญา <span className="font-bold">จะนำไปหักเป็นค่าแรกเข้า</span><br />
-                                        - หากไม่มาตามนัด <span className="font-bold text-red-600 underline">ขอสงวนสิทธิ์ไม่คืนเงินทุกกรณี</span>
+                                        <strong className="block text-amber-900 mb-2">เงื่อนไขการมัดจำประกันคิว:</strong>
+                                        
+                                        <div className="mb-3">
+                                            <p className="mb-1 text-amber-900">
+                                                <strong>ยอดชำระเงินมัดจำ: <span className="text-red-600 text-base">{Number(bookingDepositAmount).toLocaleString()}</span> บาท</strong>
+                                            </p>
+                                            <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/60 text-amber-900">
+                                                <p className="font-bold mb-1 underline">ข้อมูลการโอนเงิน:</p>
+                                                <p>ธนาคาร <span className="font-bold">{bankName}</span></p>
+                                                <p>เลขบัญชี <span className="font-bold">{bankAccountNo}</span></p>
+                                                <p>ชื่อบัญชี <span className="font-bold">{bankAccountName}</span></p>
+                                            </div>
+                                        </div>
+
+                                        <p className="font-bold text-amber-900 mb-1">ข้อตกลงการนัดหมาย:</p>
+                                        <div className="pl-1 border-l-2 border-amber-300 ml-1 space-y-1">
+                                            <p>- หากยกเลิก<span className="font-bold">ขอสงวนสิทธิ์ไม่คืนเงินมัดจำ</span></p>
+                                            <p>- หากท่านมาตามนัดและไม่ทำสัญญา <span className="font-bold">จะได้รับเงินคืนเต็มจำนวน</span></p>
+                                            <p>- หากตกลงทำสัญญา <span className="font-bold">จะนำไปหักเป็นค่าแรกเข้า</span></p>
+                                            <p>- หากไม่มาตามนัด <span className="font-bold text-red-600 underline">ขอสงวนสิทธิ์ไม่คืนเงินทุกกรณี</span></p>
+                                        </div>
                                     </div>
                                 </div>
 

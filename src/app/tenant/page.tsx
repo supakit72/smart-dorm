@@ -45,6 +45,8 @@ export default function TenantDashboard() {
     const [hasRoom, setHasRoom] = useState<boolean>(true);
     const [activeBooking, setActiveBooking] = useState<any | null>(null);
     const [userName, setUserName] = useState<string>('');
+    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+    const [cancelCountdown, setCancelCountdown] = useState(5);
 
     // อ้างอิงถึง input file ที่ซ่อนไว้
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,6 +195,53 @@ export default function TenantDashboard() {
 
         checkAuth();
     }, []);
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (isCancelModalOpen && cancelCountdown > 0) {
+            timer = setTimeout(() => {
+                setCancelCountdown(prev => prev - 1);
+            }, 1000);
+        }
+        return () => clearTimeout(timer);
+    }, [isCancelModalOpen, cancelCountdown]);
+
+    const openCancelModal = () => {
+        setCancelCountdown(5);
+        setIsCancelModalOpen(true);
+    };
+
+    const handleCancelBooking = async (bookingId: number, roomId: number) => {
+
+        try {
+            // Update booking status
+            const { error: bookingError } = await supabase
+                .from('room_bookings')
+                .update({ status: 'cancelled' })
+                .eq('id', bookingId);
+                
+            if (bookingError) throw bookingError;
+
+            // Update room status back to vacant
+            const { error: roomError } = await supabase
+                .from('rooms')
+                .update({ status: 'vacant' })
+                .eq('room_id', roomId);
+                
+            if (roomError) throw roomError;
+
+            alert('ยกเลิกการนัดหมายสำเร็จ');
+            setIsCancelModalOpen(false);
+            
+            // Refresh data
+            if (userUid) {
+                fetchLatestInvoice(userUid);
+            }
+        } catch (error: any) {
+            console.error('Cancel booking error:', error);
+            alert('เกิดข้อผิดพลาดในการยกเลิกการนัดหมาย: ' + error.message);
+        }
+    };
 
     const handleLogout = async () => {
         try {
@@ -492,6 +541,15 @@ export default function TenantDashboard() {
                                     <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-bold border ${activeBooking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
                                         {activeBooking.status === 'confirmed' ? 'ยืนยันแล้ว (เจอกันตามวันนัดหมาย)' : 'กำลังดำเนินการ (รอแอดมินตรวจสอบสลิป)'}
                                     </span>
+                                </div>
+                                <div className="pt-2 border-t border-slate-200 mt-2">
+                                    <button
+                                        onClick={openCancelModal}
+                                        className="w-full py-2.5 px-4 bg-white border border-red-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-300 transition-colors flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                                        ยกเลิกการนัดหมาย
+                                    </button>
                                 </div>
                             </div>
                         </section>
@@ -871,6 +929,45 @@ export default function TenantDashboard() {
                             >
                                 ปิดหน้าต่าง
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Cancel Booking Modal */}
+            {isCancelModalOpen && activeBooking && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+                        <div className="p-8 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            </div>
+                            <h2 className="text-xl font-black text-slate-800 mb-2">
+                                ต้องการยกเลิกการนัดหมายใช่หรือไม่?
+                            </h2>
+                            <p className="text-red-600 font-semibold mb-6">
+                                หากยืนยันการยกเลิก คุณจะไม่สามารถขอรับเงินมัดจำคืนได้ในทุกกรณี
+                            </p>
+
+                            <div className="w-full space-y-3">
+                                <button
+                                    onClick={() => handleCancelBooking(activeBooking.id, activeBooking.room_id)}
+                                    disabled={cancelCountdown > 0}
+                                    className={`w-full py-3.5 font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${cancelCountdown > 0 ? 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none' : 'bg-red-600 hover:bg-red-700 text-white active:scale-95'}`}
+                                >
+                                    {cancelCountdown > 0 ? (
+                                        <>กรุณารอ {cancelCountdown} วินาที...</>
+                                    ) : (
+                                        <>ยืนยันการยกเลิก (ริบมัดจำ)</>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setIsCancelModalOpen(false)}
+                                    className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all active:scale-95"
+                                >
+                                    ปิด/ไม่ยกเลิก
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

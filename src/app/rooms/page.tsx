@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
 import { useAlert } from '@/contexts/AlertContext';
+import ContractModal from '@/components/ContractModal';
 
 export default function RoomsManagementPage() {
   const router = useRouter();
@@ -46,13 +47,8 @@ export default function RoomsManagementPage() {
   const [isEditing, setIsEditing] = useState(false);
 
   // Contract Modal states
-  const [tenants, setTenants] = useState<any[]>([]);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [selectedRoomForContract, setSelectedRoomForContract] = useState<any>(null);
-  const [selectedTenantId, setSelectedTenantId] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [isSubmittingContract, setIsSubmittingContract] = useState(false);
 
   // Room Details Modal states
   const [isRoomDetailsModalOpen, setIsRoomDetailsModalOpen] = useState(false);
@@ -86,7 +82,6 @@ export default function RoomsManagementPage() {
       }
 
       fetchRooms();
-      fetchTenants();
       fetchRoomTypes();
     };
 
@@ -234,27 +229,6 @@ export default function RoomsManagementPage() {
     showConfirm('ยืนยันการแก้ไขข้อมูล', `คุณต้องการบันทึกการแก้ไขข้อมูลห้องพัก ${editRoomNumber} ใช่หรือไม่?`, confirmEditRoom);
   };
 
-  const fetchTenants = async () => {
-    try {
-      // 1. ดึงผู้เช่าทั้งหมด
-      const { data: allTenants, error: tenantError } = await supabase.from('users').select('*').eq('role', 'tenant');
-      if (tenantError) throw tenantError;
-
-      // 2. ดึงสัญญาที่ยัง Active
-      const { data: activeContracts, error: contractError } = await supabase.from('contracts').select('tenant_id').eq('is_active', true);
-      if (contractError) throw contractError;
-
-      // 3. นำข้อมูลมาคัดกรอง
-      const activeTenantIds = activeContracts?.map(c => c.tenant_id) || [];
-
-      if (allTenants) {
-        const availableTenants = allTenants.filter(t => !activeTenantIds.includes(t.user_id) && !activeTenantIds.includes(t.user_uid));
-        setTenants(availableTenants);
-      }
-    } catch (err) {
-      console.error("Fetch tenants error:", err);
-    }
-  };
 
   const confirmDeleteRoom = async (roomId: number) => {
     try {
@@ -279,45 +253,6 @@ export default function RoomsManagementPage() {
   const openContractModal = (room: any) => {
     setSelectedRoomForContract(room);
     setIsContractModalOpen(true);
-    setSelectedTenantId('');
-    setStartDate('');
-    setEndDate('');
-  };
-
-  const submitContract = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTenantId || !startDate || !endDate) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-      return;
-    }
-
-    try {
-      setIsSubmittingContract(true);
-      const selectedUser = tenants.find(t => t.user_uid === selectedTenantId || t.user_id === selectedTenantId);
-
-      const { error: contractError } = await supabase.from('contracts').insert([
-        {
-          room_id: selectedRoomForContract.room_id,
-          tenant_id: selectedUser?.user_id,
-          tenant_uid: selectedUser?.user_uid,
-          start_date: startDate,
-          end_date: endDate,
-          is_active: true
-        }
-      ]);
-      if (contractError) throw contractError;
-
-      const { error: roomError } = await supabase.from('rooms').update({ status: 'occupied' }).eq('room_id', selectedRoomForContract.room_id);
-      if (roomError) throw roomError;
-
-      setIsContractModalOpen(false);
-      fetchRooms();
-
-    } catch (err: any) {
-      alert("ทำสัญญาไม่สำเร็จ: " + err.message);
-    } finally {
-      setIsSubmittingContract(false);
-    }
   };
 
   const openRoomDetailsModal = async (room: any) => {
@@ -802,97 +737,13 @@ export default function RoomsManagementPage() {
       )}
 
       {/* Contract Modal */}
-      {isContractModalOpen && selectedRoomForContract && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsContractModalOpen(false)}></div>
-          <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden scale-100 transition-transform">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                ทำสัญญาเช่า (ห้อง {selectedRoomForContract.room_number})
-              </h3>
-              <button
-                onClick={() => setIsContractModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200/50 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
-
-            <form onSubmit={submitContract} className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">ผู้เช่า (Tenant)</label>
-                  <select
-                    required
-                    value={selectedTenantId}
-                    onChange={(e) => setSelectedTenantId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-slate-50 focus:bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                    disabled={tenants.length === 0}
-                  >
-                    {tenants.length === 0 ? (
-                      <option value="" disabled>ไม่มีผู้เช่าที่ว่างในขณะนี้</option>
-                    ) : (
-                      <>
-                        <option value="" disabled>เลือกผู้เช่า</option>
-                        {tenants.map(t => (
-                          <option key={t.user_uid || t.user_id} value={t.user_uid || t.user_id}>
-                            {t.first_name} {t.last_name} ({t.email})
-                          </option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">เริ่มสัญญา</label>
-                    <input
-                      type="date"
-                      required
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">สิ้นสุดสัญญา</label>
-                    <input
-                      type="date"
-                      required
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsContractModalOpen(false)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingContract}
-                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-md disabled:bg-blue-400 disabled:shadow-none flex justify-center items-center"
-                >
-                  {isSubmittingContract ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    'ยืนยันทำสัญญา'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ContractModal
+        isOpen={isContractModalOpen}
+        onClose={() => setIsContractModalOpen(false)}
+        onSuccess={() => fetchRooms()}
+        room={selectedRoomForContract}
+        // tenant={null} is default which triggers dropdown mode
+      />
 
       {/* Room Details Modal (Contract & Invoices) */}
       {isRoomDetailsModalOpen && selectedRoomDetails && (
@@ -932,7 +783,15 @@ export default function RoomsManagementPage() {
                 <div className="space-y-6">
                   {/* Tenant Details Card */}
                   <div className="bg-white rounded-2xl border border-slate-200/70 p-6 shadow-sm">
-                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">ข้อมูลผู้เช่าและสัญญา</h4>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest">ข้อมูลผู้เช่าและสัญญา</h4>
+                      <button 
+                        onClick={() => window.open('/contracts/print/' + contractDetails.contracts_id, '_blank')}
+                        className="text-xs font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm transition-all flex items-center gap-1.5"
+                      >
+                        📄 ดูสัญญาเช่าปัจจุบัน
+                      </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                       <div>
                         <p className="text-xs text-slate-500 mb-1">ชื่อ-นามสกุล</p>
@@ -978,13 +837,20 @@ export default function RoomsManagementPage() {
                                 <td className="px-6 py-3 font-medium text-slate-700">{formatInvoiceDate(inv.month_year)}</td>
                                 <td className="px-6 py-3 font-bold text-slate-800">{Number(inv.total_amount).toLocaleString()} ฿</td>
                                 <td className="px-6 py-3">
-                                  {inv.status === 'paid' ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700">ชำระแล้ว</span>
-                                  ) : inv.status === 'pending' ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">รอตรวจสอบ</span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-700">รอชำระ</span>
-                                  )}
+                                  <div className="flex flex-col items-start gap-1">
+                                    {inv.status === 'paid' ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700">ชำระแล้ว</span>
+                                    ) : inv.status === 'pending' ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">รอตรวจสอบ</span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-700">รอชำระ</span>
+                                    )}
+                                    <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                      {Array.isArray(inv.additional_items) && inv.additional_items.some((item: any) => item.name && item.name.includes('เงินประกันความเสียหาย'))
+                                        ? "บิลแรกเข้า (ประกันหอ)"
+                                        : "บิลค่าเช่า"}
+                                    </span>
+                                  </div>
                                 </td>
                               </tr>
                             ))

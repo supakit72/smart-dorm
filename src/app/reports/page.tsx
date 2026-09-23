@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
+import * as XLSX from 'xlsx';
 
 const normalizeMonth = (raw: string) => {
   if (!raw) return 'Unknown';
@@ -103,21 +104,32 @@ export default function ReportsPage() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          contracts (
-            rooms ( price_per_month )
-          )
-        `)
-        .eq('status', 'paid');
+      const [invoicesRes, bookingsRes, settingsRes] = await Promise.all([
+        supabase
+          .from('invoices')
+          .select(`
+            *,
+            contracts (
+              rooms ( price_per_month )
+            )
+          `)
+          .eq('status', 'paid'),
+        supabase
+          .from('room_bookings')
+          .select('*')
+          .in('status', ['confirmed', 'moved_in', 'no_show', 'cancelled']),
+        supabase
+          .from('dorm_settings')
+          .select('booking_deposit_amount')
+          .single()
+      ]);
 
-      if (error) throw error;
+      if (invoicesRes.error) throw invoicesRes.error;
+      if (bookingsRes.error) throw bookingsRes.error;
 
-      if (data) {
-        processReportData(data);
-      }
+      const depositAmount = settingsRes.data?.booking_deposit_amount || 100;
+
+      processReportData(invoicesRes.data || [], bookingsRes.data || [], depositAmount);
     } catch (err: any) {
       console.error('Error fetching reports:', err);
       alert('ไม่สามารถดึงข้อมูลรายงานได้: ' + err.message);
@@ -126,7 +138,7 @@ export default function ReportsPage() {
     }
   };
 
-  const processReportData = (invoices: any[]) => {
+  const processReportData = (invoices: any[], bookings: any[], depositAmount: number) => {
     const grouped: { [key: string]: any } = {};
 
     invoices.forEach(inv => {
@@ -139,22 +151,71 @@ export default function ReportsPage() {
           water: 0,
           electric: 0,
           rent: 0,
+          securityDeposit: 0,
+          depositIncome: 0,
           other: 0,
         };
       }
 
       const waterCost = (inv.water_unit || 0) * (inv.water_rate || 0);
       const electricCost = (inv.electric_unit || 0) * (inv.electric_rate || 0);
-      const rentCost = inv.contracts?.rooms?.price_per_month || 0;
+      let rentCost = inv.contracts?.rooms?.price_per_month || 0;
+      let securityDeposit = 0;
+      let otherCost = 0;
       const totalAmount = Number(inv.total_amount) || 0;
 
-      const otherCost = totalAmount - waterCost - electricCost - rentCost;
+      // Parse additional_items to categorize correctly (especially for move-in bills)
+      if (Array.isArray(inv.additional_items) && inv.additional_items.length > 0) {
+        let explicitRent = 0;
+        
+        inv.additional_items.forEach((item: any) => {
+          const price = Number(item.price) || 0;
+          if (item.name?.includes('ค่าเช่าล่วงหน้า')) {
+            explicitRent += price;
+          } else if (item.name?.includes('เงินประกัน')) {
+            securityDeposit += price;
+          } else if (item.name?.includes('หักเงินมัดจำ')) {
+            // Deduct the booking discount from depositIncome so 'other' is not negative
+            grouped[month].depositIncome += price; 
+          } else {
+            otherCost += price;
+          }
+        });
+        
+        if (explicitRent > 0 || securityDeposit > 0) {
+          rentCost = explicitRent;
+        }
+      } else {
+        // Regular monthly bill
+        otherCost = totalAmount - waterCost - electricCost - rentCost;
+      }
 
       grouped[month].totalRevenue += totalAmount;
       grouped[month].water += waterCost;
       grouped[month].electric += electricCost;
       grouped[month].rent += rentCost;
+      grouped[month].securityDeposit += securityDeposit;
       grouped[month].other += otherCost > 0 ? otherCost : 0;
+    });
+
+    bookings.forEach(b => {
+      const month = normalizeMonth(b.created_at);
+
+      if (!grouped[month]) {
+        grouped[month] = {
+          month,
+          totalRevenue: 0,
+          water: 0,
+          electric: 0,
+          rent: 0,
+          securityDeposit: 0,
+          depositIncome: 0,
+          other: 0,
+        };
+      }
+
+      grouped[month].depositIncome += depositAmount;
+      grouped[month].totalRevenue += depositAmount;
     });
 
     const sortedData = Object.values(grouped).sort((a: any, b: any) => {
@@ -186,9 +247,39 @@ export default function ReportsPage() {
       acc.totalWater += curr.water;
       acc.totalElectric += curr.electric;
       acc.totalRent += curr.rent;
+      acc.totalSecurityDeposit += (curr.securityDeposit || 0);
+      acc.totalDepositIncome += (curr.depositIncome || 0);
       return acc;
-    }, { totalRevenue: 0, totalWater: 0, totalElectric: 0, totalRent: 0 });
+    }, { totalRevenue: 0, totalWater: 0, totalElectric: 0, totalRent: 0, totalSecurityDeposit: 0, totalDepositIncome: 0 });
   }, [filteredData]);
+
+  const exportToExcel = () => {
+    if (filteredData.length === 0) return;
+    
+    // Prepare data for Excel
+    const excelData = filteredData.map(row => ({
+      'เดือน': formatMonthTh(row.month),
+      'ค่าเช่า': row.rent,
+      'ค่าน้ำ': row.water,
+      'ค่าไฟ': row.electric,
+      'ค่าประกัน': row.securityDeposit,
+      'รายได้มัดจำจอง': row.depositIncome,
+      'บริการอื่นๆ': row.other,
+      'รายได้สุทธิ': row.totalRevenue
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "รายได้แยกตามเดือน");
+    
+    // Set column widths
+    worksheet['!cols'] = [
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, 
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }
+    ];
+
+    XLSX.writeFile(workbook, `สรุปรายได้หอพัก_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const maxRevenue = reportData.length > 0 ? Math.max(...reportData.map(d => d.totalRevenue)) : 1;
 
@@ -240,10 +331,19 @@ export default function ReportsPage() {
             <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">รายงานสรุปรายได้</h1>
             <p className="text-slate-500 font-medium mt-1 text-sm sm:text-base">ข้อมูลรายได้จากบิลที่ชำระเงินเรียบร้อยแล้วทั้งหมด</p>
           </div>
-          {!loading && reportData.length > 0 && (
-            <div className="w-full sm:w-auto relative" ref={dropdownRef}>
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto mt-4 sm:mt-0 relative">
+            <button
+              onClick={exportToExcel}
+              disabled={loading || reportData.length === 0}
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              Export Excel
+            </button>
+            {!loading && reportData.length > 0 && (
+              <div className="w-full sm:w-auto relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="w-full sm:w-64 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all flex items-center justify-between"
               >
                 <span>
@@ -282,7 +382,8 @@ export default function ReportsPage() {
                 </div>
               )}
             </div>
-          )}
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -339,7 +440,9 @@ export default function ReportsPage() {
                     <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>ค่าเช่า</div>
                     <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-cyan-400 shadow-sm"></div>ค่าน้ำ</div>
                     <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-400 shadow-sm"></div>ค่าไฟ</div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-purple-400 shadow-sm"></div>บริการอื่นๆ เช่น เช่าตู้เย็น</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-400 shadow-sm"></div>ค่าประกัน</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400 shadow-sm"></div>รายได้มัดจำจอง</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-purple-400 shadow-sm"></div>บริการอื่นๆ</div>
                   </div>
                 )}
               </div>
@@ -354,6 +457,8 @@ export default function ReportsPage() {
                     const rentPct = data.totalRevenue > 0 ? (data.rent / data.totalRevenue) * 100 : 0;
                     const waterPct = data.totalRevenue > 0 ? (data.water / data.totalRevenue) * 100 : 0;
                     const electricPct = data.totalRevenue > 0 ? (data.electric / data.totalRevenue) * 100 : 0;
+                    const securityPct = data.totalRevenue > 0 ? (data.securityDeposit / data.totalRevenue) * 100 : 0;
+                    const depositIncomePct = data.totalRevenue > 0 ? (data.depositIncome / data.totalRevenue) * 100 : 0;
                     const otherPct = data.totalRevenue > 0 ? (data.other / data.totalRevenue) * 100 : 0;
 
                     return (
@@ -380,6 +485,16 @@ export default function ReportsPage() {
                             {electricPct > 0 && (
                               <div className="h-full bg-yellow-400 transition-all hover:brightness-110 flex items-center justify-center text-xs text-white font-bold" style={{ width: `${electricPct}%` }} title={`ค่าไฟ: ${data.electric.toLocaleString()} ฿`}>
                                 {electricPct > 8 && `${Math.round(electricPct)}%`}
+                              </div>
+                            )}
+                            {securityPct > 0 && (
+                              <div className="h-full bg-rose-400 transition-all hover:brightness-110 flex items-center justify-center text-xs text-white font-bold" style={{ width: `${securityPct}%` }} title={`ค่าประกัน: ${data.securityDeposit.toLocaleString()} ฿`}>
+                                {securityPct > 8 && `${Math.round(securityPct)}%`}
+                              </div>
+                            )}
+                            {depositIncomePct > 0 && (
+                              <div className="h-full bg-emerald-400 transition-all hover:brightness-110 flex items-center justify-center text-xs text-white font-bold" style={{ width: `${depositIncomePct}%` }} title={`รายได้มัดจำจอง: ${data.depositIncome.toLocaleString()} ฿`}>
+                                {depositIncomePct > 8 && `${Math.round(depositIncomePct)}%`}
                               </div>
                             )}
                             {otherPct > 0 && (
@@ -416,6 +531,8 @@ export default function ReportsPage() {
                       <th className="px-6 py-4 font-bold text-right">ค่าเช่า</th>
                       <th className="px-6 py-4 font-bold text-right">ค่าน้ำ</th>
                       <th className="px-6 py-4 font-bold text-right">ค่าไฟ</th>
+                      <th className="px-6 py-4 font-bold text-right">ค่าประกัน</th>
+                      <th className="px-6 py-4 font-bold text-right">รายได้มัดจำจอง</th>
                       <th className="px-6 py-4 font-bold text-right">บริการอื่นๆ</th>
                       <th className="px-6 py-4 font-bold text-right bg-blue-50/30">รายได้สุทธิ</th>
                     </tr>
@@ -423,7 +540,7 @@ export default function ReportsPage() {
                   <tbody className="divide-y divide-slate-100 text-sm">
                     {filteredData.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-medium">
+                        <td colSpan={8} className="px-6 py-12 text-center text-slate-500 font-medium">
                           ยังไม่มีข้อมูล
                         </td>
                       </tr>
@@ -453,6 +570,18 @@ export default function ReportsPage() {
                               <div className="flex flex-col items-end">
                                 <span className="text-amber-500 font-medium">{row.electric.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 {renderChangeIndicator(row.electric, prevRow?.electric, `${row.month}-electric`)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right whitespace-nowrap">
+                              <div className="flex flex-col items-end">
+                                <span className="text-rose-500 font-medium">{row.securityDeposit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                {renderChangeIndicator(row.securityDeposit, prevRow?.securityDeposit, `${row.month}-security`)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right whitespace-nowrap">
+                              <div className="flex flex-col items-end">
+                                <span className="text-emerald-600 font-medium">{row.depositIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                {renderChangeIndicator(row.depositIncome, prevRow?.depositIncome, `${row.month}-deposit`)}
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right whitespace-nowrap">
