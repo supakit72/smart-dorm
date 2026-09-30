@@ -167,7 +167,7 @@ export default function ReportsPage() {
       // Parse additional_items to categorize correctly (especially for move-in bills)
       if (Array.isArray(inv.additional_items) && inv.additional_items.length > 0) {
         let explicitRent = 0;
-        
+
         inv.additional_items.forEach((item: any) => {
           const price = Number(item.price) || 0;
           if (item.name?.includes('ค่าเช่าล่วงหน้า')) {
@@ -176,12 +176,12 @@ export default function ReportsPage() {
             securityDeposit += price;
           } else if (item.name?.includes('หักเงินมัดจำ')) {
             // Deduct the booking discount from depositIncome so 'other' is not negative
-            grouped[month].depositIncome += price; 
+            grouped[month].depositIncome += price;
           } else {
             otherCost += price;
           }
         });
-        
+
         if (explicitRent > 0 || securityDeposit > 0) {
           rentCost = explicitRent;
         }
@@ -255,7 +255,7 @@ export default function ReportsPage() {
 
   const exportToExcel = () => {
     if (filteredData.length === 0) return;
-    
+
     // Prepare data for Excel
     const excelData = filteredData.map(row => ({
       'เดือน': formatMonthTh(row.month),
@@ -271,10 +271,10 @@ export default function ReportsPage() {
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "รายได้แยกตามเดือน");
-    
+
     // Set column widths
     worksheet['!cols'] = [
-      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, 
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
       { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }
     ];
 
@@ -344,44 +344,44 @@ export default function ReportsPage() {
               <div className="w-full sm:w-auto relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full sm:w-64 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all flex items-center justify-between"
-              >
-                <span>
-                  {selectedMonths.length === 0
-                    ? "ดูทั้งหมด"
-                    : `เลือก ${selectedMonths.length} เดือน`}
-                </span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </button>
+                  className="w-full sm:w-64 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all flex items-center justify-between"
+                >
+                  <span>
+                    {selectedMonths.length === 0
+                      ? "ดูทั้งหมด"
+                      : `เลือก ${selectedMonths.length} เดือน`}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
 
-              {isDropdownOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-full sm:w-64 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[300px] overflow-y-auto">
-                  <div className="p-2">
-                    <label className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border-b border-slate-100 mb-1">
-                      <input
-                        type="checkbox"
-                        checked={selectedMonths.length === 0}
-                        onChange={selectAll}
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 accent-blue-600 cursor-pointer"
-                      />
-                      <span className="text-sm font-bold text-slate-700">ดูทั้งหมด</span>
-                    </label>
-
-                    {reportData.map(d => (
-                      <label key={d.month} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                {isDropdownOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-full sm:w-64 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[300px] overflow-y-auto">
+                    <div className="p-2">
+                      <label className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border-b border-slate-100 mb-1">
                         <input
                           type="checkbox"
-                          checked={selectedMonths.includes(d.month)}
-                          onChange={() => toggleMonth(d.month)}
+                          checked={selectedMonths.length === 0}
+                          onChange={selectAll}
                           className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 accent-blue-600 cursor-pointer"
                         />
-                        <span className="text-sm font-medium text-slate-600">{formatMonthTh(d.month)}</span>
+                        <span className="text-sm font-bold text-slate-700">ดูทั้งหมด</span>
                       </label>
-                    ))}
+
+                      {reportData.map(d => (
+                        <label key={d.month} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={selectedMonths.includes(d.month)}
+                            onChange={() => toggleMonth(d.month)}
+                            className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+                          />
+                          <span className="text-sm font-medium text-slate-600">{formatMonthTh(d.month)}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
             )}
           </div>
         </div>

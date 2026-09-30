@@ -12,8 +12,6 @@ export default function AdminDashboard() {
   const [summaryData, setSummaryData] = useState<any[]>([]);
   const [roomData, setRoomData] = useState<any[]>([]);
   const [allInvoices, setAllInvoices] = useState<any[]>([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
 
   const getCycleDates = (cutoff: number) => {
     const today = new Date();
@@ -90,24 +88,6 @@ export default function AdminDashboard() {
         .from('view_active_contracts')
         .select('*');
       if (contractsError) throw contractsError;
-
-      // ดึงข้อมูลรายการแจ้งซ่อม (เฉพาะที่ไม่ใช่ resolved)
-      const { data: maintenanceData, error: maintenanceError } = await supabase
-        .from('maintenance_requests')
-        .select(`
-          maintenance_requests_id,
-          issue_details,
-          status,
-          room_id,
-          created_at,
-          rooms (room_number)
-        `)
-        .neq('status', 'resolved')
-        .order('created_at', { ascending: false });
-
-      if (maintenanceError) throw maintenanceError;
-
-      setMaintenanceRequests(maintenanceData || []);
 
       // การคำนวณ Metrics ถูกย้ายไปทำแบบ Dynamic ในตอน Render เพื่อให้รองรับ Filter
 
@@ -192,28 +172,6 @@ export default function AdminDashboard() {
     } catch (err: any) {
       console.error("Logout Error:", err);
       alert("ไม่สามารถออกจากระบบได้: " + err.message);
-    }
-  };
-
-  const updateMaintenanceStatus = async (id: string, newStatus: string) => {
-    try {
-      setIsUpdatingStatus(id);
-
-      const { error: updateError } = await supabase
-        .from('maintenance_requests')
-        .update({ status: newStatus })
-        .eq('maintenance_requests_id', id);
-
-      if (updateError) throw updateError;
-
-      // Refresh data
-      await fetchData();
-
-    } catch (err: any) {
-      console.error("Update Status Error:", err);
-      alert("เกิดข้อผิดพลาดในการอัปเดตสถานะ: " + (err.message || "กรุณาลองใหม่อีกครั้ง"));
-    } finally {
-      setIsUpdatingStatus(null);
     }
   };
 
@@ -593,100 +551,6 @@ export default function AdminDashboard() {
                 <p className="text-slate-500 font-medium">ไม่มีข้อมูลห้องพักในระบบ</p>
               </div>
             )}
-          </div>
-        </section>
-
-        {/* Maintenance Requests */}
-        <section>
-          <div className="mb-5 flex flex-col sm:flex-row justify-between sm:items-end gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
-                รายการแจ้งซ่อมล่าสุด
-              </h2>
-              <p className="text-sm text-slate-500">จัดการคำร้องขอซ่อมแซมจากผู้เช่า (เฉพาะรายการที่ยังไม่สำเร็จ)</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-sm font-semibold text-slate-600">
-                    <th className="py-4 px-6 w-24">ห้องพัก</th>
-                    <th className="py-4 px-6">รายละเอียดปัญหา</th>
-                    <th className="py-4 px-6 w-48">วันที่และเวลาที่แจ้ง</th>
-                    <th className="py-4 px-6 w-32">สถานะปัจจุบัน</th>
-                    <th className="py-4 px-6 w-64">อัปเดตสถานะ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {maintenanceRequests.length > 0 ? (
-                    maintenanceRequests.map((req) => (
-                      <tr key={req.maintenance_requests_id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-4 px-6">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-800 font-bold text-sm border border-slate-200/80">
-                            {req.rooms?.room_number || '-'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <p className="text-sm text-slate-700 line-clamp-2">{req.issue_details}</p>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200/50">
-                            {formatDateThai(req.created_at)}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          {req.status === 'pending' ? (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 font-semibold text-xs border border-rose-100 capitalize">
-                              รอดำเนินการ
-                            </span>
-                          ) : req.status === 'in_progress' ? (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 font-semibold text-xs border border-amber-100 capitalize">
-                              กำลังดำเนินการ
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-semibold text-xs border border-slate-200 capitalize">
-                              {req.status}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-4 px-6">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => updateMaintenanceStatus(req.maintenance_requests_id, 'in_progress')}
-                              disabled={isUpdatingStatus === req.maintenance_requests_id || req.status === 'in_progress'}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border shadow-sm flex items-center gap-1.5 ${req.status === 'in_progress'
-                                ? 'bg-amber-100/50 text-amber-400 border-amber-200/50 cursor-not-allowed'
-                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 hover:shadow active:scale-95'
-                                }`}
-                            >
-                              กำลังดำเนินการ
-                            </button>
-                            <button
-                              onClick={() => updateMaintenanceStatus(req.maintenance_requests_id, 'resolved')}
-                              disabled={isUpdatingStatus === req.maintenance_requests_id}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs transition-all border border-emerald-200 shadow-sm hover:shadow flex items-center gap-1.5 active:scale-95"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                              ซ่อมเสร็จสิ้น
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="py-12 text-center text-slate-500 bg-slate-50/30">
-                        <div className="text-3xl mb-2 text-slate-300">✨</div>
-                        ไม่พบรายการแจ้งซ่อมที่ค้างอยู่
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
           </div>
         </section>
 
