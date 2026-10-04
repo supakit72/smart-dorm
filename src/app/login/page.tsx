@@ -48,7 +48,18 @@ export default function LoginPage() {
         }
 
         // 3. แยกสิทธิ์การใช้งาน (Role Routing)
-        if (userData.role === 'admin') {
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.get('redirect');
+        const roomId = params.get('roomId');
+
+        let targetUrl = redirectUrl;
+        if (targetUrl && roomId) {
+          targetUrl += `?roomId=${roomId}`;
+        }
+
+        if (targetUrl) {
+          router.push(targetUrl);
+        } else if (userData.role === 'admin') {
           router.push('/');
         } else if (userData.role === 'tenant') {
           router.push('/tenant');
@@ -156,11 +167,19 @@ export default function LoginPage() {
               )}
             </button>
             
-            <div className="text-center mt-6">
-              <span className="text-slate-500 text-sm font-medium">ยังไม่มีบัญชีผู้เช่า? </span>
-              <Link href="/register" className="text-blue-600 font-bold text-sm hover:underline">
-                สมัครสมาชิกที่นี่
-              </Link>
+            <div className="text-center mt-6 space-y-4">
+              <div>
+                <span className="text-slate-500 text-sm font-medium">ยังไม่มีบัญชีผู้เช่า? </span>
+                <Link href="/register" className="text-blue-600 font-bold text-sm hover:underline">
+                  สมัครสมาชิกที่นี่
+                </Link>
+              </div>
+              <div className="pt-4 border-t border-slate-100">
+                <Link href="/book-room" className="text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center justify-center gap-1.5 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  กลับไปดูรายการห้องพักว่าง
+                </Link>
+              </div>
             </div>
           </form>
         </div>

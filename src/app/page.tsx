@@ -191,7 +191,7 @@ export default function AdminDashboard() {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        router.push('/login');
+        router.push('/book-room');
         return;
       }
 
@@ -201,8 +201,18 @@ export default function AdminDashboard() {
         .eq('user_uid', session.user.id)
         .single();
 
-      if (!userData || userData.role !== 'admin') {
-        router.push('/login');
+      if (!userData) {
+        router.push('/book-room');
+        return;
+      }
+
+      if (userData.role === 'tenant') {
+        router.push('/tenant');
+        return;
+      }
+
+      if (userData.role !== 'admin') {
+        router.push('/book-room');
         return;
       }
 

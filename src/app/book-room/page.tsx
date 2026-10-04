@@ -99,6 +99,22 @@ export default function BookRoomPage() {
         initData();
     }, []);
 
+    // Auto-open modal if roomId is in URL
+    useEffect(() => {
+        if (rooms.length > 0) {
+            const params = new URLSearchParams(window.location.search);
+            const roomId = params.get('roomId');
+            if (roomId) {
+                const roomToOpen = rooms.find(r => r.room_id.toString() === roomId);
+                if (roomToOpen) {
+                    handleOpenModal(roomToOpen);
+                    // Clear the parameter so it doesn't reopen on refresh
+                    window.history.replaceState(null, '', '/book-room');
+                }
+            }
+        }
+    }, [rooms]);
+
     const fetchAvailableRooms = async () => {
         try {
             setLoading(true);
@@ -332,7 +348,7 @@ export default function BookRoomPage() {
                     </div>
                     <div>
                         {!isLoggedIn ? (
-                            <Link href="/login" className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm flex items-center gap-2 border border-blue-100">
+                            <Link href="/login?redirect=/book-room" className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm flex items-center gap-2 border border-blue-100">
                                 เข้าสู่ระบบ <span className="hidden sm:inline">(ผู้เช่า/ผู้ดูแล)</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                             </Link>
@@ -452,7 +468,12 @@ export default function BookRoomPage() {
                                 {/* Guest Registration Form (if not logged in) */}
                                 {!isLoggedIn && (
                                     <div className="space-y-4">
-                                        <h4 className="font-black text-slate-800 text-lg border-b border-slate-100 pb-2">1. ข้อมูลผู้ติดต่อ (สร้างบัญชีใหม่)</h4>
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-2 gap-2">
+                                            <h4 className="font-black text-slate-800 text-lg">1. ข้อมูลผู้ติดต่อ (สร้างบัญชีใหม่)</h4>
+                                            <Link href={`/login?redirect=/book-room&roomId=${selectedRoom.room_id}`} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors shrink-0 flex items-center justify-center">
+                                                มีบัญชีอยู่แล้ว? เข้าสู่ระบบ
+                                            </Link>
+                                        </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">ชื่อจริง <span className="text-rose-500">*</span></label>
