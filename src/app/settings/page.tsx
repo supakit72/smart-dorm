@@ -19,6 +19,7 @@ export default function SettingsPage() {
     bank_name: '',
     bank_account_no: '',
     bank_account_name: '',
+    promptpay_id: '',
     cutoff_day: 27,
     vat_percentage: 7,
     invoice_logo_url: '',
@@ -30,6 +31,7 @@ export default function SettingsPage() {
     electric_rate: 0,
     due_day: 5,
     max_booking_days: 7,
+    booking_deposit_amount: 100,
     unavailable_dates: [] as string[]
   });
 
@@ -64,6 +66,7 @@ export default function SettingsPage() {
           bank_name: data.bank_name || '',
           bank_account_no: data.bank_account_no || '',
           bank_account_name: data.bank_account_name || '',
+          promptpay_id: data.promptpay_id || '',
           cutoff_day: data.cutoff_day || 27,
           vat_percentage: data.vat_percentage !== undefined ? data.vat_percentage : 7,
           invoice_logo_url: data.invoice_logo_url || '',
@@ -75,6 +78,7 @@ export default function SettingsPage() {
           electric_rate: data.electric_rate || 0,
           due_day: data.due_day || 5,
           max_booking_days: data.max_booking_days ?? 7,
+          booking_deposit_amount: data.booking_deposit_amount ?? 100,
           unavailable_dates: data.unavailable_dates || []
         });
         if (data.updated_at) {
@@ -254,6 +258,17 @@ export default function SettingsPage() {
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
                   />
                 </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">หมายเลขพร้อมเพย์ (PromptPay ID)</label>
+                  <input
+                    type="text"
+                    value={formData.promptpay_id}
+                    onChange={(e) => setFormData({...formData, promptpay_id: e.target.value})}
+                    placeholder="08X-XXX-XXXX หรือ เลขบัตร ปชช. 13 หลัก"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">หากระบุหมายเลขพร้อมเพย์ ระบบจะสร้าง QR Code อัตโนมัติในหน้าจองห้องพัก</p>
+                </div>
               </div>
             </div>
 
@@ -429,6 +444,21 @@ export default function SettingsPage() {
                     />
                   </div>
                   <p className="mt-2 text-xs text-slate-500">จำนวนวันที่อนุญาตให้ลูกค้าเลือกล่วงหน้าจากวันปัจจุบัน</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">จำนวนเงินมัดจำ (บาท)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={formData.booking_deposit_amount}
+                      onChange={(e) => setFormData({...formData, booking_deposit_amount: parseFloat(e.target.value) || 0})}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none transition-all bg-slate-50 focus:bg-white text-sm"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">เงินมัดจำประกันคิวที่ผู้เช่าต้องโอนเพื่อจองห้อง</p>
                 </div>
                 
                 <div>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -7,6 +8,8 @@ import { supabase } from '@/backend/lib/supabase';
 
 export default function MaintenanceRequest() {
     const [issueDetails, setIssueDetails] = useState('');
+    const [category, setCategory] = useState('ไฟฟ้า');
+    const [activeTab, setActiveTab] = useState<'form' | 'history'>('form');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [userId, setUserId] = useState<number | null>(null);
     const [roomId, setRoomId] = useState<number | null>(null);
@@ -26,7 +29,6 @@ export default function MaintenanceRequest() {
                     return;
                 }
 
-                // Get user_id
                 const { data: userData } = await supabase
                     .from('users')
                     .select('user_id')
@@ -40,7 +42,6 @@ export default function MaintenanceRequest() {
 
                 setUserId(userData.user_id);
 
-                // Get active contract's room_id
                 const { data: contractData } = await supabase
                     .from('contracts')
                     .select('room_id')
@@ -56,7 +57,6 @@ export default function MaintenanceRequest() {
                     return;
                 }
 
-                // Fetch history
                 const { data: historyData } = await supabase
                     .from('maintenance_requests')
                     .select('*')
@@ -96,7 +96,6 @@ export default function MaintenanceRequest() {
                 const fileExt = selectedFile.name.split('.').pop();
                 const fileName = `maintenance/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
                 
-                // อัปโหลดไฟล์ไปที่ Supabase Storage (ใช้ bucket slips แต่อยู่ในโฟลเดอร์ maintenance)
                 const { error: uploadError } = await supabase.storage
                     .from('slips')
                     .upload(fileName, selectedFile, {
@@ -115,13 +114,15 @@ export default function MaintenanceRequest() {
                 photoUrl = publicUrlData.publicUrl;
             }
 
+            const fullIssueDetails = `[${category}] ${issueDetails}`;
+
             const { error } = await supabase
                 .from('maintenance_requests')
                 .insert([
                     {
                         room_id: roomId,
                         tenant_id: userId,
-                        issue_details: issueDetails,
+                        issue_details: fullIssueDetails,
                         status: 'pending',
                         photo_url: photoUrl
                     }
@@ -131,8 +132,8 @@ export default function MaintenanceRequest() {
 
             alert('ส่งเรื่องแจ้งซ่อมเรียบร้อยแล้ว');
             
-            // ล้างข้อมูลในฟอร์มและดึงประวัติใหม่
             setIssueDetails('');
+            setCategory('ไฟฟ้า');
             setSelectedFile(null);
             setPreviewUrl(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -143,6 +144,8 @@ export default function MaintenanceRequest() {
                 .eq('tenant_id', userId)
                 .order('created_at', { ascending: false });
             if (historyData) setMaintenanceHistory(historyData);
+
+            setActiveTab('history');
 
         } catch (err: any) {
             console.error("Submit error:", err);
@@ -169,162 +172,222 @@ export default function MaintenanceRequest() {
         return date.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
+    const categories = [
+        { id: 'ไฟฟ้า', icon: '⚡' },
+        { id: 'ประปา', icon: '💧' },
+        { id: 'แอร์', icon: '❄️' },
+        { id: 'เฟอร์นิเจอร์', icon: '🪑' },
+        { id: 'ประตู-หน้าต่าง', icon: '🚪' },
+        { id: 'อื่นๆ', icon: '❓' }
+    ];
+
+    const inProgressCount = maintenanceHistory.filter(h => h.status === 'pending' || h.status === 'in_progress').length;
+
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-            {/* Header */}
-            <header className="bg-white border-b border-slate-200/60 sticky top-0 z-10 shadow-sm">
+            {/* Header Navigation */}
+            <header className="bg-white border-b border-slate-200/60 sticky top-0 z-20 shadow-sm pt-safe">
                 <div className="max-w-3xl mx-auto px-4 sm:px-6">
-                    <div className="flex justify-between h-16 items-center">
-                        <div className="flex items-center gap-3">
-                            <Link href="/tenant" className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors active:scale-95">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                            </Link>
-                            <h1 className="text-lg font-bold text-slate-800 tracking-tight">
-                                แจ้งซ่อมแซม
-                            </h1>
-                        </div>
-                        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold border border-amber-200 shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
-                        </div>
+                    <div className="flex h-16 items-center gap-4">
+                        <Link href="/tenant" className="w-10 h-10 flex items-center justify-center rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors active:scale-95 shadow-sm border border-slate-200/60 shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </Link>
+                        <h1 className="text-lg font-black text-slate-800 tracking-tight flex-1">
+                            แจ้งซ่อมและติดตามสถานะ
+                        </h1>
+                    </div>
+                    
+                    {/* Segmented Tabs */}
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-4 shadow-inner border border-slate-200/60">
+                        <button
+                            onClick={() => setActiveTab('form')}
+                            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${activeTab === 'form' ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 active:scale-95'}`}
+                        >
+                            <span className="mr-1.5">🛠️</span>แจ้งปัญหาใหม่
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'history' ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 active:scale-95'}`}
+                        >
+                            ประวัติ / สถานะ
+                            {inProgressCount > 0 && (
+                                <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                                    {inProgressCount}
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20">
-                        <div className="w-10 h-10 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
-                        <p className="mt-4 text-slate-500 font-medium text-sm">กำลังโหลดข้อมูลห้องพัก...</p>
+                        <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+                        <p className="mt-4 text-slate-500 font-medium text-sm">กำลังโหลดข้อมูล...</p>
                     </div>
                 ) : (
                     <>
-                        <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/60 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-amber-50 to-transparent rounded-bl-full opacity-60 pointer-events-none"></div>
-
-                    <div className="relative z-10 mb-6">
-                        <h2 className="text-xl font-bold text-slate-800 mb-2">พบปัญหาในห้องพัก?</h2>
-                        <p className="text-sm text-slate-500">กรุณาระบุรายละเอียดปัญหาที่พบ เพื่อให้ช่างเข้าตรวจสอบและทำการซ่อมแซม</p>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="relative z-10 space-y-5">
-                        <div className="space-y-2">
-                            <label htmlFor="issueDetails" className="block text-sm font-semibold text-slate-700">
-                                รายละเอียดปัญหา <span className="text-rose-500">*</span>
-                            </label>
-                            <textarea
-                                id="issueDetails"
-                                value={issueDetails}
-                                onChange={(e) => setIssueDetails(e.target.value)}
-                                placeholder="ตัวอย่าง: แอร์น้ำหยด, หลอดไฟห้องน้ำขาด, ก๊อกน้ำอ่างล้างหน้ารั่ว..."
-                                rows={5}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all resize-none shadow-sm"
-                                disabled={isSubmitting}
-                            ></textarea>
-                        </div>
-
-                        {/* แนบรูปภาพ */}
-                        <div className="space-y-3">
-                            <label className="block text-sm font-semibold text-slate-700">
-                                แนบรูปภาพประกอบ (ถ้ามี) <span className="text-slate-400 font-normal ml-1">ไม่เกิน 5MB</span>
-                            </label>
-                            
-                            {previewUrl ? (
-                                <div className="relative inline-block">
-                                    <img src={previewUrl} alt="Preview" className="max-h-48 rounded-xl border border-slate-200 shadow-sm" />
-                                    <button 
-                                        type="button" 
-                                        onClick={() => { setSelectedFile(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                                        className="absolute -top-3 -right-3 w-8 h-8 flex items-center justify-center bg-white border border-slate-200 text-rose-500 rounded-full shadow-md hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                    </button>
-                                </div>
-                            ) : (
-                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group">
-                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" className="text-slate-400 mb-2 group-hover:text-blue-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                        <p className="mb-1 text-sm text-slate-500 font-medium"><span className="text-blue-600 font-bold">คลิกอัปโหลด</span> หรือลากไฟล์มาวาง</p>
-                                        <p className="text-xs text-slate-400">PNG, JPG, JPEG</p>
-                                    </div>
-                                    <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={isSubmitting} />
-                                </label>
-                            )}
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || !issueDetails.trim()}
-                            className={`w-full font-medium py-3.5 px-4 rounded-xl transition-all shadow-md flex justify-center items-center gap-2 active:scale-[0.98] ${isSubmitting || !issueDetails.trim()
-                                    ? 'bg-slate-300 cursor-not-allowed text-slate-500 shadow-none'
-                                    : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200 hover:shadow-lg'
-                                }`}
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
-                                    กำลังส่งเรื่อง...
-                                </>
-                            ) : (
-                                <>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                                    ส่งเรื่องแจ้งซ่อม
-                                </>
-                            )}
-                        </button>
-                    </form>
-                </div>
-
-                <div className="bg-amber-50 rounded-2xl p-5 border border-amber-100 flex gap-4 items-start">
-                    <div className="text-2xl mt-0.5">💡</div>
-                    <div>
-                        <h4 className="font-semibold text-amber-800 text-sm mb-1">คำแนะนำ</h4>
-                        <p className="text-xs text-amber-700/80 leading-relaxed">
-                            การแจ้งซ่อมที่ชัดเจนจะช่วยให้ช่างสามารถเตรียมเครื่องมือและอะไหล่ได้ถูกต้อง รวดเร็วยิ่งขึ้น หากเป็นกรณีฉุกเฉิน (เช่น ท่อน้ำแตก น้ำท่วมห้อง) กรุณาติดต่อที่สำนักงานโดยตรง
-                        </p>
-                    </div>
-                </div>
-
-                {/* My Maintenance History */}
-                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/60 overflow-hidden">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                        ประวัติการแจ้งซ่อมของฉัน
-                    </h3>
-                    
-                    {maintenanceHistory.length > 0 ? (
-                        <div className="space-y-4">
-                            {maintenanceHistory.map((item) => (
-                                <div key={item.maintenance_requests_id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                    <div className="flex-1 space-y-1">
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            {item.status === 'pending' ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 font-semibold text-[10px] uppercase tracking-wider border border-rose-100">รอดำเนินการ</span>
-                                            ) : item.status === 'in_progress' ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-semibold text-[10px] uppercase tracking-wider border border-amber-100">กำลังดำเนินการ</span>
-                                            ) : (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-semibold text-[10px] uppercase tracking-wider border border-emerald-100">เสร็จสิ้น</span>
-                                            )}
-                                            <span className="text-xs text-slate-400 font-medium">
-                                                {formatDateThai(item.created_at)}
-                                            </span>
+                        {/* Tab 1: New Request Form */}
+                        {activeTab === 'form' && (
+                            <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-xl shadow-slate-200/40 border border-slate-100 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+                                <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
+                                    
+                                    {/* Category Chips */}
+                                    <div className="space-y-3">
+                                        <label className="block text-sm font-bold text-slate-700">หมวดหมู่ปัญหา</label>
+                                        <div className="flex flex-wrap gap-2.5">
+                                            {categories.map(cat => (
+                                                <button
+                                                    key={cat.id}
+                                                    type="button"
+                                                    onClick={() => setCategory(cat.id)}
+                                                    className={`px-4 py-2.5 rounded-full text-sm font-bold transition-all border ${category === cat.id ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/30 scale-105' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                                >
+                                                    {cat.icon} {cat.id}
+                                                </button>
+                                            ))}
                                         </div>
-                                        <p className="text-sm text-slate-700">{item.issue_details}</p>
                                     </div>
-                                    {item.photo_url && (
-                                        <a href={item.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0 group overflow-hidden rounded-lg border border-slate-200">
-                                            <img src={item.photo_url} alt="Attached" className="w-16 h-16 object-cover group-hover:scale-110 transition-transform duration-300" />
-                                        </a>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-10 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                            <span className="text-3xl mb-2 block">📋</span>
-                            <p className="text-slate-500 font-medium text-sm">ยังไม่มีประวัติการแจ้งซ่อม</p>
-                        </div>
-                    )}
-                </div>
+
+                                    {/* Issue Details */}
+                                    <div className="space-y-3">
+                                        <label htmlFor="issueDetails" className="block text-sm font-bold text-slate-700">
+                                            รายละเอียดปัญหา <span className="text-rose-500">*</span>
+                                        </label>
+                                        <textarea
+                                            id="issueDetails"
+                                            value={issueDetails}
+                                            onChange={(e) => setIssueDetails(e.target.value)}
+                                            placeholder="ระบุบริเวณที่พบปัญหาและอาการ เช่น แอร์มีน้ำหยดมุมขวา"
+                                            rows={4}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none shadow-inner"
+                                            disabled={isSubmitting}
+                                        ></textarea>
+                                    </div>
+
+                                    {/* Photo Uploader */}
+                                    <div className="space-y-3">
+                                        <label className="block text-sm font-bold text-slate-700">
+                                            รูปภาพถ่ายหน้างาน (ถ้ามี)
+                                        </label>
+                                        
+                                        {previewUrl ? (
+                                            <div className="relative inline-block w-full">
+                                                <img src={previewUrl} alt="Preview" className="w-full h-48 object-cover rounded-2xl border border-slate-200 shadow-sm" />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => { setSelectedFile(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                                    className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/60 backdrop-blur-md text-white rounded-full shadow-md hover:bg-black/80 transition-colors"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-blue-200 rounded-2xl bg-blue-50/30 hover:bg-blue-50/80 transition-colors cursor-pointer group active:scale-[0.98]">
+                                                <div className="flex flex-col items-center justify-center text-center px-4">
+                                                    <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center text-blue-500 mb-2 border border-blue-100 group-hover:scale-110 transition-transform">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                                    </div>
+                                                    <p className="text-sm text-slate-600 font-medium"><span className="text-blue-600 font-bold">แตะเพื่อถ่ายรูป</span> หรือเลือกจากคลังภาพ</p>
+                                                </div>
+                                                <input ref={fileInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} disabled={isSubmitting} />
+                                            </label>
+                                        )}
+                                    </div>
+
+                                    {/* Submit Button */}
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting || !issueDetails.trim()}
+                                        className={`w-full py-4 px-4 rounded-2xl font-bold transition-all shadow-md flex justify-center items-center gap-2 active:scale-[0.98] ${isSubmitting || !issueDetails.trim()
+                                                ? 'bg-slate-100 cursor-not-allowed text-slate-400 shadow-none'
+                                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20'
+                                            }`}
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                                                กำลังส่งข้อมูล...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                                                ยืนยันส่งเรื่องแจ้งซ่อม
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
+
+                        {/* Tab 2: History & Tracking */}
+                        {activeTab === 'history' && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                                {maintenanceHistory.length > 0 ? (
+                                    maintenanceHistory.map((item) => {
+                                        const match = item.issue_details.match(/^\[(.*?)\]\s*(.*)$/);
+                                        const itemCat = match ? match[1] : 'ทั่วไป';
+                                        const itemDetail = match ? match[2] : item.issue_details;
+
+                                        return (
+                                            <div key={item.maintenance_requests_id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/30 overflow-hidden">
+                                                
+                                                {/* Card Header */}
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="inline-flex w-max items-center px-3 py-1 rounded-full bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-widest mb-1.5 border border-slate-200/60">
+                                                            หมวดหมู่ {itemCat}
+                                                        </span>
+                                                        <p className="text-sm font-medium text-slate-800 line-clamp-2">{itemDetail}</p>
+                                                    </div>
+                                                    {item.photo_url && (
+                                                        <a href={item.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm ml-3">
+                                                            <img src={item.photo_url} alt="Attached" className="w-16 h-16 object-cover" />
+                                                        </a>
+                                                    )}
+                                                </div>
+
+                                                <p className="text-[11px] font-bold text-slate-400 mb-4">{formatDateThai(item.created_at)}</p>
+
+                                                {/* Step Tracker / Timeline 3 Steps */}
+                                                <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100/80">
+                                                    <div className="flex items-center justify-between relative">
+                                                        {/* Step 1: Pending */}
+                                                        <div className="flex flex-col items-center z-10">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm transition-colors ${['pending', 'in_progress', 'resolved'].includes(item.status) ? 'bg-amber-500 shadow-amber-500/30 ring-4 ring-amber-50' : 'bg-slate-200 text-transparent'}`}>✓</div>
+                                                            <span className={`text-[10px] mt-2 font-black ${['pending', 'in_progress', 'resolved'].includes(item.status) ? 'text-amber-600' : 'text-slate-400'}`}>รับเรื่องแล้ว</span>
+                                                        </div>
+                                                        
+                                                        <div className={`absolute top-4 left-8 right-[50%] h-1 -translate-y-1/2 ${['in_progress', 'resolved'].includes(item.status) ? 'bg-blue-400' : 'bg-slate-200'}`}></div>
+
+                                                        {/* Step 2: In Progress */}
+                                                        <div className="flex flex-col items-center z-10">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm transition-colors ${['in_progress', 'resolved'].includes(item.status) ? 'bg-blue-500 shadow-blue-500/30 ring-4 ring-blue-50' : 'bg-slate-200 text-transparent'}`}>✓</div>
+                                                            <span className={`text-[10px] mt-2 font-black ${['in_progress', 'resolved'].includes(item.status) ? 'text-blue-600' : 'text-slate-400'}`}>กำลังดำเนินการ</span>
+                                                        </div>
+
+                                                        <div className={`absolute top-4 left-[50%] right-8 h-1 -translate-y-1/2 ${item.status === 'resolved' ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
+
+                                                        {/* Step 3: Resolved */}
+                                                        <div className="flex flex-col items-center z-10">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm transition-colors ${item.status === 'resolved' ? 'bg-emerald-500 shadow-emerald-500/30 ring-4 ring-emerald-50' : 'bg-slate-200 text-transparent'}`}>✓</div>
+                                                            <span className={`text-[10px] mt-2 font-black ${item.status === 'resolved' ? 'text-emerald-600' : 'text-slate-400'}`}>เสร็จสิ้น</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center py-16 bg-white rounded-[2rem] shadow-sm border border-slate-200/60">
+                                        <div className="text-4xl mb-3 block">📋</div>
+                                        <h3 className="text-lg font-bold text-slate-800">ยังไม่มีประวัติการแจ้งซ่อม</h3>
+                                        <p className="text-slate-500 font-medium text-sm mt-1">ประวัติการส่งเรื่องของคุณจะแสดงที่นี่</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </>
                 )}
             </main>

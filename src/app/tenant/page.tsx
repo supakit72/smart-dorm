@@ -36,7 +36,7 @@ export default function TenantDashboard() {
     const [userUid, setUserUid] = useState<string | null>(null);
     const [dormSettings, setDormSettings] = useState<any>(null);
     const [isPaying, setIsPaying] = useState(false);
-    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
     const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -315,9 +315,9 @@ export default function TenantDashboard() {
             }
 
             // 5. เมื่อทุกอย่างสำเร็จ ให้ดึงข้อมูลมาแสดงใหม่ซ้ำ เพื่ออัปเดต UI 
-            if (userUid) {
-                await fetchLatestInvoice(userUid, false);
-            }
+            if (userUid) { await fetchLatestInvoice(userUid, false); }
+
+            alert('ส่งสลิปชำระเงินเรียบร้อยแล้ว!\nระบบจะทำการอัปเดตสถานะทันทีเมื่อผู้ดูแลตรวจสอบสำเร็จ');
 
             // เคลียร์ค่า input file
             setSelectedFile(null);
@@ -380,21 +380,21 @@ export default function TenantDashboard() {
 
     if (isPending) {
         statusBadge = (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 font-bold text-xs border border-rose-100 shadow-sm uppercase tracking-wide">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs border border-rose-100 shadow-sm uppercase tracking-wider">
                 รอชำระเงิน
             </span>
         );
     } else if (isRejected) {
         statusBadge = (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 font-bold text-xs border border-orange-100 shadow-sm uppercase tracking-wide animate-pulse">
-                สลิปไม่ถูกต้อง กรุณาส่งใหม่
+            <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-orange-50 text-orange-600 font-bold text-xs border border-orange-100 shadow-sm uppercase tracking-wider animate-pulse">
+                สลิปไม่ถูกต้อง (ส่งใหม่)
             </span>
         );
     }
 
     if (isPending || isRejected) {
         actionButton = (
-            <div className="space-y-3">
+            <div className="space-y-4">
                 <input
                     type="file"
                     accept="image/*"
@@ -404,119 +404,136 @@ export default function TenantDashboard() {
                 />
                 
                 {selectedFile && previewUrl ? (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center gap-3 animate-in fade-in zoom-in-95">
-                        <img src={previewUrl} alt="Slip Preview" className="max-h-40 rounded-lg shadow-sm border border-slate-200" />
-                        <p className="text-sm text-slate-600 font-medium break-all text-center">{selectedFile.name}</p>
-                        <div className="flex w-full gap-2 mt-2">
-                            <button
-                                onClick={handleCancelUpload}
-                                disabled={isPaying}
-                                className="flex-1 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 active:scale-[0.98]"
-                            >
-                                ยกเลิก
-                            </button>
-                            <button
-                                onClick={handleConfirmUpload}
-                                disabled={isPaying}
-                                className={`flex-[2] font-medium py-2.5 px-4 rounded-xl transition-all shadow-md flex justify-center items-center gap-2 active:scale-[0.98] ${isPaying ? 'bg-blue-400 cursor-not-allowed text-white shadow-none' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 hover:shadow-lg'}`}
-                            >
-                                {isPaying ? (
-                                    <>
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        กำลังยืนยัน...
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                        ยืนยันการแจ้งโอนเงิน
-                                    </>
-                                )}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-3 animate-in fade-in zoom-in-95 shadow-inner">
+                        <div className="relative rounded-xl overflow-hidden mb-1 border border-slate-200 bg-white w-full flex justify-center">
+                            <img src={previewUrl} alt="Slip Preview" className="max-h-48 object-contain rounded-lg" />
+                            <button onClick={handleCancelUpload} className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-colors shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
+                        <p className="text-xs text-slate-500 font-medium truncate max-w-full px-2">{selectedFile.name}</p>
+                        
+                        <button
+                            onClick={handleConfirmUpload}
+                            disabled={isPaying}
+                            className={`w-full font-bold py-3.5 px-4 rounded-xl transition-all shadow-md flex justify-center items-center gap-2 active:scale-[0.98] ${isPaying ? 'bg-blue-400 cursor-not-allowed text-white shadow-none' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'}`}
+                        >
+                            {isPaying ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    กำลังส่งข้อมูล...
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
+                                    ยืนยันส่งสลิปชำระเงิน
+                                </>
+                            )}
+                        </button>
                     </div>
                 ) : (
                     <button
                         onClick={handleTriggerUpload}
-                        className="w-full font-medium py-3.5 px-4 rounded-xl transition-all shadow-sm bg-white border-2 border-dashed border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400 flex justify-center items-center gap-2 active:scale-[0.98]"
+                        className="w-full font-bold py-5 px-4 rounded-2xl transition-all shadow-sm bg-blue-50/50 border-2 border-dashed border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 flex flex-col justify-center items-center gap-2 active:scale-95 group"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
-                        เลือกรูปภาพสลิป
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-blue-100 text-blue-500 mb-1 group-hover:scale-110 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
+                        </div>
+                        <span className="text-base">ชำระเงิน / แนบสลิปโอนเงิน</span>
+                        <span className="text-xs font-medium text-slate-400">แตะเพื่อถ่ายรูปหรือเลือกสลิปจากคลังภาพ</span>
                     </button>
                 )}
             </div>
         );
     } else if (isReviewing) {
         statusBadge = (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 font-bold text-xs border border-amber-100 shadow-sm uppercase tracking-wide">
-                รอตรวจสอบ
+            <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 font-bold text-xs border border-amber-100 shadow-sm uppercase tracking-wider">
+                รอตรวจสอบสลิป
             </span>
         );
         actionButton = (
             <div 
                 onClick={() => setSelectedReceipt(invoice)}
-                className="w-full bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer text-amber-700 border border-amber-200 font-medium py-3.5 px-4 rounded-xl flex justify-center items-center gap-2 active:scale-[0.98]"
+                className="w-full bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer text-amber-700 border border-amber-200 font-bold py-4 px-4 rounded-2xl flex justify-center items-center gap-3 active:scale-95 shadow-sm"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span>กำลังรอผู้ดูแลระบบตรวจสอบสลิป (คลิกดูรายละเอียด)</span>
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-amber-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div className="flex flex-col items-start">
+                    <span>รอผู้ดูแลตรวจสอบสลิป</span>
+                    <span className="text-xs font-medium text-amber-600/80">แตะเพื่อดูรายละเอียด</span>
+                </div>
             </div>
         );
     } else if (isPaid) {
         statusBadge = (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-bold text-xs border border-emerald-100 shadow-sm uppercase tracking-wide">
-                ชำระแล้ว
+            <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-600 font-bold text-xs border border-emerald-100 shadow-sm uppercase tracking-wider">
+                ชำระเงินเรียบร้อย
             </span>
         );
         actionButton = (
             <div 
                 onClick={() => setSelectedReceipt(invoice)}
-                className="w-full bg-emerald-50 hover:bg-emerald-100 transition-colors cursor-pointer text-emerald-700 border border-emerald-200 font-medium py-3.5 px-4 rounded-xl flex justify-center items-center gap-2 active:scale-[0.98]"
+                className="w-full bg-emerald-50 hover:bg-emerald-100 transition-colors cursor-pointer text-emerald-700 border border-emerald-200 font-bold py-4 px-4 rounded-2xl flex justify-center items-center gap-3 active:scale-95 shadow-sm"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                <span>อัปโหลดสลิปและชำระเงินเรียบร้อย (คลิกดูใบเสร็จ)</span>
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-emerald-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                </div>
+                <div className="flex flex-col items-start">
+                    <span>ชำระเงินเรียบร้อยแล้ว</span>
+                    <span className="text-xs font-medium text-emerald-600/80">แตะเพื่อดูใบเสร็จรับเงิน</span>
+                </div>
             </div>
         );
     } else if (invoice) {
         statusBadge = (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-semibold text-xs border border-slate-200 uppercase tracking-wide">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs border border-slate-200 shadow-sm uppercase tracking-wider">
                 {invoice.status}
             </span>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-            {/* Header */}
-            <header className="bg-white border-b border-slate-200/60 sticky top-0 z-10 shadow-sm">
-                <div className="max-w-3xl mx-auto px-4 sm:px-6">
-                    <div className="flex justify-between h-16 items-center">
-                        <h1 className="text-lg font-bold text-slate-800 tracking-tight flex items-center">
-                            Smart Dorm Manager
-                            <span className="mx-2 text-slate-300">|</span>
-                            <span className="text-emerald-600 font-semibold text-base sm:text-lg">มุมผู้เช่า</span>
-                        </h1>
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-slate-700 hidden sm:block">
-                                {userName || 'ผู้เช่า'}
-                            </span>
-                            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold border border-emerald-200 shadow-sm uppercase">
-                                {userName ? userName.charAt(0) : 'T'}
-                            </div>
-                            <button
-                                onClick={handleLogout}
-                                className="text-sm font-semibold text-slate-600 hover:text-rose-600 transition-colors px-3 py-1.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100 flex items-center gap-1.5 active:scale-95 shadow-sm"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                                ออกจากระบบ
-                            </button>
+        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-28">
+            {/* Header (Tenant Profile & Room Info) */}
+            <header className="bg-white border-b border-slate-200/60 sticky top-0 z-20 shadow-sm pt-safe">
+                <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-500/30 uppercase">
+                            {userName ? userName.charAt(0) : 'T'}
+                        </div>
+                        <div>
+                            <h1 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">ผู้เช่า</h1>
+                            <p className="text-base font-black text-slate-800 leading-none">{userName || 'ผู้เช่า'}</p>
                         </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleLogout}
+                            className="p-2.5 rounded-xl bg-slate-50 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors shadow-sm active:scale-95 flex items-center justify-center"
+                            title="ออกจากระบบ"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        </button>
+                    </div>
                 </div>
+                {hasRoom && activeBooking === null && invoice && (
+                    <div className="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center shadow-inner">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span className="font-medium text-slate-300">ห้องพักของคุณ</span>
+                        </div>
+                        <div className="font-black text-emerald-400 tracking-widest text-lg">
+                            {invoice.room_number || '-'}
+                        </div>
+                    </div>
+                )}
             </header>
 
-            <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+            <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-8">
                 {!hasRoom ? (
                     activeBooking ? (
-                        <section className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-10 animate-in fade-in zoom-in-95 relative overflow-hidden">
+                        <section className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-6 animate-in fade-in zoom-in-95 relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full opacity-60 pointer-events-none"></div>
                             
                             <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 border shadow-sm ${activeBooking.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-500' : 'bg-amber-50 border-amber-100 text-amber-500'}`}>
@@ -537,12 +554,26 @@ export default function TenantDashboard() {
                                     <span className="text-lg font-bold text-slate-700">{new Date(activeBooking.appointment_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
                                 </div>
                                 <div>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">ยอดมัดจำ</span>
+                                    <span className="text-lg font-bold text-blue-600">{dormSettings?.booking_deposit_amount ? `${dormSettings.booking_deposit_amount} บาท` : '100 บาท'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">สลิปที่แนบ</span>
+                                    {activeBooking.slip_image ? (
+                                        <a href={activeBooking.slip_image} target="_blank" rel="noopener noreferrer" className="block w-full h-32 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                            <img src={activeBooking.slip_image} alt="Slip" className="w-full h-full object-cover" />
+                                        </a>
+                                    ) : (
+                                        <span className="text-sm font-medium text-slate-500">- ไม่มีสลิป -</span>
+                                    )}
+                                </div>
+                                <div>
                                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">สถานะ</span>
                                     <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-bold border ${activeBooking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
-                                        {activeBooking.status === 'confirmed' ? 'ยืนยันแล้ว (เจอกันตามวันนัดหมาย)' : 'กำลังดำเนินการ (รอแอดมินตรวจสอบสลิป)'}
+                                        {activeBooking.status === 'confirmed' ? 'ยืนยันแล้ว (เจอกันตามวันนัดหมาย)' : 'รอผู้ดูแลตรวจสอบสลิปมัดจำ'}
                                     </span>
                                 </div>
-                                <div className="pt-2 border-t border-slate-200 mt-2">
+                                <div className="pt-4 border-t border-slate-200 mt-2">
                                     <button
                                         onClick={openCancelModal}
                                         className="w-full py-2.5 px-4 bg-white border border-red-200 text-red-500 font-bold rounded-xl hover:bg-red-50 hover:border-red-300 transition-colors flex items-center justify-center gap-2 text-sm"
@@ -554,15 +585,15 @@ export default function TenantDashboard() {
                             </div>
                         </section>
                     ) : (
-                        <section className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-10 animate-in fade-in zoom-in-95">
-                            <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mb-6 border border-amber-100 shadow-sm">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/><circle cx="12" cy="8" r="2"/></svg>
+                        <section className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center text-center mt-6 animate-in fade-in zoom-in-95">
+                            <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6 border border-blue-100 shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/><circle cx="12" cy="8" r="2"/></svg>
                             </div>
                             <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-3">ยังไม่มีข้อมูลห้องพัก</h2>
                             <p className="text-slate-500 text-base max-w-md mb-8">
-                                คุณยังไม่มีข้อมูลห้องพักในระบบ กรุณาติดต่อเจ้าของหอพักเพื่อเพิ่มข้อมูลเข้าห้องพัก และทำสัญญาเช่าให้เรียบร้อย
+                                คุณยังไม่มีข้อมูลห้องพักในระบบ กรุณาติดต่อเจ้าของหอพักเพื่อเพิ่มข้อมูลเข้าห้องพัก และทำสัญญาเช่าให้เรียบร้อย หรือกดค้นหาห้องพักด้านล่าง
                             </p>
-                            <Link href="/book-room" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-2">
+                            <Link href="/book-room" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                 ค้นหาและจองห้องพัก
                             </Link>
@@ -570,204 +601,175 @@ export default function TenantDashboard() {
                     )
                 ) : (
                     <>
-                        {/* Outstanding Balance Card */}
+                        {/* Hero Bill (Latest Invoice) */}
                         <section>
-                    {invoice ? (
-                        <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/60 relative overflow-hidden transition-all hover:shadow-md">
-                            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-emerald-50 to-transparent rounded-bl-full opacity-60 pointer-events-none"></div>
+                            {invoice ? (
+                                <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-slate-200/40 border border-slate-100 relative overflow-hidden flex flex-col gap-5">
+                                    {/* Decorative background */}
+                                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-blue-50 to-emerald-50 rounded-full opacity-60 blur-3xl pointer-events-none"></div>
 
-                            <div className="flex justify-between items-start mb-6 relative z-10">
-                                <div>
-                                    <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-1">บิลเดือนล่าสุด</h2>
-                                    <p className="text-slate-800 font-medium">ห้อง {invoice.room_number || '-'}</p>
-                                </div>
-                                {statusBadge}
-                            </div>
-
-                            {/* รายละเอียดค่าใช้จ่าย */}
-                            <div className="space-y-4 mb-6 relative z-10">
-                                <div className="flex justify-between items-center text-sm border-b border-dashed border-slate-200 pb-3">
-                                    <span className="text-slate-600 flex items-center gap-2">🏠 ค่าเช่าห้อง</span>
-                                    <span className="font-medium text-slate-800">{invoice.calculatedRent.toLocaleString()} ฿</span>
-                                </div>
-                                <div className="flex justify-between items-start text-sm border-b border-dashed border-slate-200 pb-3">
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-slate-600 flex items-center gap-2">💧 ค่าน้ำประปา <span className="text-xs text-slate-500">({getMeterCycle(invoice.month_year, dormSettings?.meter_reading_day || 20)})</span></span>
-                                        <span className="text-xs text-slate-400">
-                                            {invoice.water_meter_previous !== undefined && invoice.water_meter_current !== undefined 
-                                                ? `(มิเตอร์: ${invoice.water_meter_previous} - ${invoice.water_meter_current}) ` 
-                                                : ''}
-                                            {invoice.water_unit} ยูนิต @ {invoice.water_rate} บาท
-                                        </span>
+                                    {/* Header / Month */}
+                                    <div className="flex justify-between items-center z-10">
+                                        <div>
+                                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">บิลค่าเช่าเดือนล่าสุด</h2>
+                                            <p className="text-2xl font-black text-slate-800">{invoice.month_year}</p>
+                                        </div>
+                                        {statusBadge}
                                     </div>
-                                    <span className="font-medium text-slate-800 mt-0.5">{invoice.calculatedWater.toLocaleString()} ฿</span>
-                                </div>
-                                <div className="flex justify-between items-start text-sm border-b border-dashed border-slate-200 pb-3">
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-slate-600 flex items-center gap-2">⚡ ค่าไฟฟ้า <span className="text-xs text-slate-500">({getMeterCycle(invoice.month_year, dormSettings?.meter_reading_day || 20)})</span></span>
-                                        <span className="text-xs text-slate-400">
-                                            {invoice.electric_meter_previous !== undefined && invoice.electric_meter_current !== undefined 
-                                                ? `(มิเตอร์: ${invoice.electric_meter_previous} - ${invoice.electric_meter_current}) ` 
-                                                : ''}
-                                            {invoice.electric_unit} ยูนิต @ {invoice.electric_rate} บาท
-                                        </span>
+
+                                    {/* Big Total */}
+                                    <div className="z-10 py-6 border-y border-dashed border-slate-200 flex flex-col items-center justify-center bg-slate-50/50 rounded-2xl">
+                                        <p className="text-sm font-bold text-slate-500 mb-2">ยอดรวมสุทธิ (Total Amount)</p>
+                                        <div className="flex items-end gap-1.5 text-slate-900">
+                                            <span className="text-5xl sm:text-6xl font-black tracking-tighter">{invoice.calculatedTotal.toLocaleString()}</span>
+                                            <span className="text-xl font-bold mb-2 text-slate-400">฿</span>
+                                        </div>
                                     </div>
-                                    <span className="font-medium text-slate-800 mt-0.5">{invoice.calculatedElectric.toLocaleString()} ฿</span>
-                                </div>
-                                {invoice.additional_items && Array.isArray(invoice.additional_items) && invoice.additional_items.map((item: any, idx: number) => (
-                                    <div key={idx} className="flex justify-between items-center text-sm border-b border-dashed border-slate-200 pb-3">
-                                        <span className="text-slate-600 flex items-center gap-2">✨ {item.name}</span>
-                                        <span className="font-medium text-slate-800">{Number(item.price || 0).toLocaleString()} ฿</span>
+
+                                    {/* Compact Breakdown */}
+                                    <div className="z-10 bg-white rounded-2xl px-4 py-3 border border-slate-100 text-sm space-y-2 shadow-sm">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500 font-medium">ค่าเช่าห้อง</span>
+                                            <span className="font-bold text-slate-700">{invoice.calculatedRent.toLocaleString()} ฿</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500 font-medium">ค่าน้ำ ({invoice.water_unit} หน่วย)</span>
+                                            <span className="font-bold text-slate-700">{invoice.calculatedWater.toLocaleString()} ฿</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500 font-medium">ค่าไฟ ({invoice.electric_unit} หน่วย)</span>
+                                            <span className="font-bold text-slate-700">{invoice.calculatedElectric.toLocaleString()} ฿</span>
+                                        </div>
+                                        {invoice.additional_items && Array.isArray(invoice.additional_items) && invoice.additional_items.map((item: any, idx: number) => (
+                                            <div key={idx} className="flex justify-between items-center">
+                                                <span className="text-slate-500 font-medium">{item.name}</span>
+                                                <span className="font-bold text-slate-700">{Number(item.price || 0).toLocaleString()} ฿</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
 
-                                <div className="flex justify-between items-end pt-2">
-                                    <span className="text-base font-bold text-slate-800">ยอดรวมสุทธิ</span>
-                                    <p className="text-4xl font-black text-slate-800 tracking-tight text-right">
-                                        {invoice.calculatedTotal.toLocaleString()} <span className="text-lg font-bold text-slate-500 ml-1">฿</span>
-                                    </p>
+                                    {/* Action Block */}
+                                    <div className="z-10 mt-2 flex flex-col gap-3">
+                                        {actionButton}
+                                        <button
+                                            onClick={() => {
+                                                setFullInvoiceData(invoice);
+                                                setIsFullInvoiceModalOpen(true);
+                                            }}
+                                            className="w-full py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold rounded-2xl border border-slate-200 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                                            ดูใบแจ้งหนี้แบบละเอียด
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="bg-white rounded-[2rem] p-10 text-center shadow-sm border border-slate-200/60 border-dashed">
+                                    <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">📭</div>
+                                    <h3 className="text-lg font-bold text-slate-700">ไม่มีบิลค้างชำระ</h3>
+                                    <p className="text-slate-500 text-sm mt-1">ยังไม่มีรอบบิลที่ต้องชำระในขณะนี้</p>
+                                </div>
+                            )}
+                        </section>
 
-                            <div className="relative z-10 mt-6 flex flex-col gap-3">
-                                {actionButton}
-                                <button
-                                    onClick={() => {
-                                        setFullInvoiceData(invoice);
-                                        setIsFullInvoiceModalOpen(true);
-                                    }}
-                                    className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl shadow-sm border border-slate-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                                >
-                                    📄 ดูใบแจ้งหนี้แบบละเอียด
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-3xl p-10 text-center shadow-sm border border-slate-200/60 border-dashed">
-                            <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">📭</div>
-                            <h3 className="text-lg font-bold text-slate-700">ไม่มีบิลค้างชำระ</h3>
-                            <p className="text-slate-500 text-sm mt-1">ยังไม่มีรอบบิลที่ต้องชำระในขณะนี้</p>
-                        </div>
-                    )}
-                </section>
-
-                {/* Action Menus */}
-                <section>
-                    <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setIsHistoryModalOpen(true)} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center gap-3 transition-all hover:border-blue-300 hover:shadow-md active:scale-95 group">
-                            <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-colors shadow-inner">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
-                            </div>
-                            <span className="text-sm font-semibold text-slate-700 text-center group-hover:text-blue-700">ประวัติการจ่ายเงิน</span>
-                        </button>
-
-                        <Link href="/tenant/maintenance" className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 flex flex-col items-center justify-center gap-3 transition-all hover:border-amber-300 hover:shadow-md active:scale-95 group">
-                            <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-colors shadow-inner">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
-                            </div>
-                            <span className="text-sm font-semibold text-slate-700 text-center group-hover:text-amber-700">แจ้งซ่อมแซม</span>
-                        </Link>
-                    </div>
-                </section>
-                    </>
-                )}
-            </main>
-
-            {/* Modal ประวัติการจ่ายเงิน */}
-            {isHistoryModalOpen && (
-                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-center items-center p-4 transition-opacity">
-                    <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-                        <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
-                                ประวัติการจ่ายเงิน
-                            </h2>
-                            <button onClick={() => setIsHistoryModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
-                        </div>
-                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
-                            {invoiceHistory.length > 0 ? (
+                        {/* Invoice History Accordion List */}
+                        {invoiceHistory.length > 1 && (
+                            <section className="mt-8">
+                                <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    ประวัติบิลย้อนหลัง
+                                </h3>
                                 <div className="space-y-3">
-                                    {invoiceHistory.map((inv, idx) => {
-                                        const isPaid = inv.status === 'paid' || inv.status === 'ชำระแล้ว';
-                                        const isRejected = inv.status === 'rejected';
-                                        const isReviewing = inv.status === 'pending' || inv.status === 'รอตรวจสอบ';
-                                        const isPending = inv.status === 'unpaid' || inv.status === 'รอชำระ';
+                                    {invoiceHistory.slice(1).map((inv, idx) => {
+                                        const isExpanded = expandedHistory === idx;
+                                        const isPaidPast = inv.status === 'paid' || inv.status === 'ชำระแล้ว';
+                                        
                                         return (
-                                            <div key={inv.invoices_id || idx} className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-3 hover:border-blue-200 transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-full bg-slate-50 flex flex-col items-center justify-center text-slate-500 border border-slate-100 font-medium shrink-0">
-                                                        <span className="text-xs">{inv.month_year ? inv.month_year.split('/')[0] : '-'}</span>
-                                                        <span className="text-[10px] font-bold">{inv.month_year ? inv.month_year.split('/')[1] : ''}</span>
+                                            <div key={inv.invoices_id || idx} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden transition-all">
+                                                {/* Header / Summary */}
+                                                <div 
+                                                    onClick={() => setExpandedHistory(isExpanded ? null : idx)}
+                                                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors active:bg-slate-100"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-12 h-12 rounded-xl bg-slate-50 flex flex-col items-center justify-center text-slate-500 border border-slate-100 font-medium shrink-0">
+                                                            <span className="text-xs font-bold">{inv.month_year ? inv.month_year.split('/')[0] : '-'}</span>
+                                                            <span className="text-[10px] font-bold">{inv.month_year ? inv.month_year.split('/')[1] : ''}</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-800 text-base">{inv.calculatedTotal?.toLocaleString()} ฿</p>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                {isPaidPast ? (
+                                                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 uppercase">ชำระแล้ว</span>
+                                                                ) : (
+                                                                    <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 uppercase">{inv.status}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="font-bold text-slate-800 text-base">ยอดสุทธิ {inv.calculatedTotal?.toLocaleString()} ฿</p>
-                                                        <p className="text-sm text-slate-500 font-medium">ห้อง {inv.room_number || '-'}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col sm:items-end gap-2">
-                                                    {isPaid ? (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-bold text-xs border border-emerald-100 shadow-sm uppercase tracking-wide">
-                                                            ชำระแล้ว
-                                                        </span>
-                                                    ) : isRejected ? (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 font-bold text-xs border border-orange-100 shadow-sm uppercase tracking-wide">
-                                                            ถูกตีกลับ
-                                                        </span>
-                                                    ) : isReviewing ? (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-xs border border-blue-100 shadow-sm uppercase tracking-wide">
-                                                            รอตรวจสอบ
-                                                        </span>
-                                                    ) : isPending ? (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 font-bold text-xs border border-rose-100 shadow-sm uppercase tracking-wide">
-                                                            รอชำระเงิน
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-semibold text-xs border border-slate-200 uppercase tracking-wide">
-                                                            {inv.status}
-                                                        </span>
-                                                    )}
-                                                    <div className="flex gap-2">
-                                                        <button 
-                                                            onClick={() => setSelectedReceipt(inv)}
-                                                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors hover:bg-blue-100 active:scale-95"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                                            ใบเสร็จสลิป
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => {
-                                                                setFullInvoiceData(inv);
-                                                                setIsFullInvoiceModalOpen(true);
-                                                            }}
-                                                            title="ดูใบแจ้งหนี้แบบละเอียด"
-                                                            className="text-xs font-semibold text-slate-600 hover:text-slate-800 flex items-center justify-center bg-slate-50 w-8 h-8 rounded-lg border border-slate-200 transition-colors hover:bg-slate-100 active:scale-95"
-                                                        >
-                                                            👁️
-                                                        </button>
+                                                    <div className="text-slate-400">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isExpanded ? 'rotate-180 text-blue-500' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
                                                     </div>
                                                 </div>
+
+                                                {/* Expanded Details */}
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 pt-1 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-2">
+                                                        <div className="space-y-2 text-sm mt-3 mb-4">
+                                                            <div className="flex justify-between items-center text-slate-600">
+                                                                <span>ค่าเช่าห้อง</span>
+                                                                <span className="font-medium text-slate-800">{inv.calculatedRent?.toLocaleString()} ฿</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-slate-600">
+                                                                <span>ค่าน้ำประปา ({inv.water_unit} หน่วย)</span>
+                                                                <span className="font-medium text-slate-800">{inv.calculatedWater?.toLocaleString()} ฿</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-slate-600">
+                                                                <span>ค่าไฟฟ้า ({inv.electric_unit} หน่วย)</span>
+                                                                <span className="font-medium text-slate-800">{inv.calculatedElectric?.toLocaleString()} ฿</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedReceipt(inv); }}
+                                                                className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-bold rounded-xl transition-colors active:scale-95 flex items-center justify-center gap-1.5 border border-blue-100"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                                ดูสลิป
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setFullInvoiceData(inv);
+                                                                    setIsFullInvoiceModalOpen(true);
+                                                                }}
+                                                                className="flex-1 py-2 bg-white hover:bg-slate-100 text-slate-700 text-sm font-bold rounded-xl transition-colors active:scale-95 flex items-center justify-center gap-1.5 border border-slate-200"
+                                                            >
+                                                                📄 ใบแจ้งหนี้
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
                                 </div>
-                            ) : (
-                                <div className="text-center py-10">
-                                    <p className="text-slate-500">ไม่มีประวัติการจ่ายเงิน</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="p-4 border-t border-slate-100 bg-white">
-                            <button onClick={() => setIsHistoryModalOpen(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors active:scale-95">
-                                ปิดหน้าต่าง
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                            </section>
+                        )}
 
-            {/* Modal ใบเสร็จและรายละเอียดสลิป */}
+                        {/* Floating Maintenance Banner */}
+                        <Link href="/tenant/maintenance" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900 text-white px-6 py-3.5 rounded-2xl shadow-2xl shadow-slate-900/30 border border-slate-700 font-bold flex items-center gap-3 active:scale-95 transition-all hover:bg-slate-800 w-[90%] max-w-sm justify-between animate-in slide-in-from-bottom-10">
+                            <div className="flex items-center gap-2.5 text-sm">
+                                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-lg">🛠️</div>
+                                พบปัญหาในห้องพัก?
+                            </div>
+                            <span className="text-emerald-400 text-sm flex items-center gap-1">แจ้งซ่อม <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                        </Link>
+                    </>
+                )}
+            </main>
+
+            {/* Modal ใบเสร็จและรายละเอียดสลิป */}            {/* Modal ใบเสร็จและรายละเอียดสลิป */}
             {selectedReceipt && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex justify-center items-center p-4 transition-opacity">
                     <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 relative">

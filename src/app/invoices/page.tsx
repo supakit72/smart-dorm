@@ -60,9 +60,9 @@ export default function InvoicesManagementPage() {
   const [applyVat, setApplyVat] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // View Slip Modal states
-  const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
-  const [selectedSlipImage, setSelectedSlipImage] = useState<string | null>(null);
+  // Slip Inspector states
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const [isMobileSlipModalOpen, setIsMobileSlipModalOpen] = useState(false);
 
   // Filters state
   const [filterMonth, setFilterMonth] = useState('');
@@ -127,26 +127,13 @@ export default function InvoicesManagementPage() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          contracts (
-            rooms ( room_number, price_per_month ),
-            users!tenant_id ( first_name, last_name )
-          )
-        `)
+        .from('view_invoice_details')
+        .select('*')
         .order('invoices_id', { ascending: false });
 
       if (error) throw error;
       if (data) {
-        // Map data to maintain compatibility with the UI
-        const mappedData = data.map((inv: any) => ({
-          ...inv,
-          room_number: inv.contracts?.rooms?.room_number || '-',
-          first_name: inv.contracts?.users?.first_name || '',
-          last_name: inv.contracts?.users?.last_name || '',
-        }));
-        setInvoices(mappedData);
+        setInvoices(data);
       }
     } catch (err: any) {
       console.error("Fetch Invoices Error:", err);
@@ -310,9 +297,9 @@ export default function InvoicesManagementPage() {
     );
   };
 
-  const openSlipModal = (imgUrl: string) => {
-    setSelectedSlipImage(imgUrl);
-    setIsSlipModalOpen(true);
+  const handleSelectInvoice = (id: number) => {
+    setSelectedInvoiceId(id);
+    setIsMobileSlipModalOpen(true);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -468,6 +455,8 @@ export default function InvoicesManagementPage() {
     }
     return formatDate(dateString);
   };
+
+  const selectedInvoice = invoices.find(inv => inv.invoices_id === selectedInvoiceId);
 
   const filteredInvoices = invoices.filter(inv => {
     const matchMonth = filterMonth ? (() => {
@@ -677,8 +666,10 @@ export default function InvoicesManagementPage() {
             </section>
 
             {/* Section 2: Table & Filters */}
-            <section className="space-y-4">
-              <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex-wrap">
+            <section className="flex flex-col lg:flex-row gap-6">
+              {/* Left Side: 60% */}
+              <div className="w-full lg:w-[60%] space-y-4">
+                <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex-wrap">
                 <h2 className="text-xl font-black text-slate-800 tracking-tight whitespace-nowrap">ประวัติบิลและการจัดการ</h2>
 
                 <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto xl:justify-end">
@@ -775,24 +766,56 @@ export default function InvoicesManagementPage() {
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-                  <div className="overflow-x-auto">
+                  
+                  {/* Mobile Cards */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {filteredInvoices.length === 0 ? (
+                      <div className="px-6 py-12 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-2xl mb-3">📄</div>
+                          <p>ไม่พบรายการบิลที่ตรงกับตัวกรอง</p>
+                        </div>
+                      </div>
+                    ) : (
+                      filteredInvoices.map((invoice) => (
+                        <div 
+                          key={invoice.invoices_id} 
+                          className={`p-4 transition-colors ${selectedInvoiceId === invoice.invoices_id ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`} 
+                          onClick={() => handleSelectInvoice(invoice.invoices_id)}
+                        >
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="font-bold text-slate-800 text-base">ห้อง {invoice.room_number || '-'}</div>
+                            <div className="text-xs text-slate-500 font-medium">{formatMonthYear(invoice.month_year)}</div>
+                          </div>
+                          <div className="flex justify-between items-center mb-3">
+                            <div className="font-bold text-lg text-slate-700">{Number(invoice.total_amount).toLocaleString()} ฿</div>
+                            {getStatusBadge(invoice)}
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleSelectInvoice(invoice.invoices_id); }} 
+                            className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-sm transition-all"
+                          >
+                            ตรวจสลิป / จัดการ
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Desktop Compact Table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                       <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
                         <tr>
-                          <th className="px-4 py-4 whitespace-nowrap">วันที่ออกบิล</th>
-                          <th className="px-4 py-4 whitespace-nowrap">กำหนดชำระ</th>
-                          <th className="px-4 py-4 whitespace-nowrap">ห้องพัก</th>
-                          <th className="px-4 py-4 whitespace-nowrap">ค่าน้ำ</th>
-                          <th className="px-4 py-4 whitespace-nowrap">ค่าไฟ</th>
-                          <th className="px-4 py-4 whitespace-nowrap">ยอดรวม</th>
+                          <th className="px-4 py-4 whitespace-nowrap">เดือน / ห้องพัก</th>
+                          <th className="px-4 py-4 whitespace-nowrap">ยอดรวมสุทธิ</th>
                           <th className="px-4 py-4 whitespace-nowrap">สถานะ</th>
-                          <th className="px-4 py-4 text-center whitespace-nowrap">จัดการ</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {filteredInvoices.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                            <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
                               <div className="flex flex-col items-center justify-center">
                                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-2xl mb-3">📄</div>
                                 <p>ไม่พบรายการบิลที่ตรงกับตัวกรอง</p>
@@ -801,91 +824,20 @@ export default function InvoicesManagementPage() {
                           </tr>
                         ) : (
                           filteredInvoices.map((invoice) => (
-                            <tr key={invoice.invoices_id} className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-4 text-slate-700 font-medium whitespace-nowrap">
-                                {formatMonthYear(invoice.month_year)}
-                              </td>
-                              <td className="px-4 py-4 text-slate-700 font-medium whitespace-nowrap">
-                                {formatDate(invoice.due_date)}
-                              </td>
-                              <td className="px-4 py-4 font-bold text-slate-800 whitespace-nowrap">
-                                {invoice.room_number || '-'}
+                            <tr 
+                              key={invoice.invoices_id} 
+                              onClick={() => handleSelectInvoice(invoice.invoices_id)}
+                              className={`cursor-pointer transition-colors ${selectedInvoiceId === invoice.invoices_id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                            >
+                              <td className="px-4 py-4 whitespace-nowrap">
+                                <p className="font-bold text-slate-800 text-base">ห้อง {invoice.room_number || '-'}</p>
+                                <p className="text-xs text-slate-500 font-medium">{formatMonthYear(invoice.month_year)}</p>
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">
-                                <div className="space-y-0.5">
-                                  <p className="text-blue-600 font-semibold text-sm">{invoice.water_unit} น.</p>
-                                  <p className="text-xs text-slate-500">@ {invoice.water_rate} ฿/น.</p>
-                                  <p className="text-slate-700 font-medium text-sm">{(invoice.water_unit * invoice.water_rate).toLocaleString()} ฿</p>
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap">
-                                <div className="space-y-0.5">
-                                  <p className="text-amber-600 font-semibold text-sm">{invoice.electric_unit} น.</p>
-                                  <p className="text-xs text-slate-500">@ {invoice.electric_rate} ฿/น.</p>
-                                  <p className="text-slate-700 font-medium text-sm">{(invoice.electric_unit * invoice.electric_rate).toLocaleString()} ฿</p>
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 font-bold text-slate-800 text-base whitespace-nowrap">
-                                {Number(invoice.total_amount).toLocaleString()} ฿
+                                <p className="font-bold text-slate-700">{Number(invoice.total_amount).toLocaleString()} ฿</p>
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">
                                 {getStatusBadge(invoice)}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap">
-                                <div className="flex items-center justify-center gap-2">
-                                  {invoice.status === 'draft' ? (
-                                    <Link
-                                      href={`/invoices/editor/${invoice.invoices_id}`}
-                                      className="p-2 rounded-lg transition-colors text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                      title="แก้ไขแบบร่าง"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                    </Link>
-                                  ) : (
-                                    <>
-                                      <button
-                                        disabled={!invoice.slip_image}
-                                        onClick={() => openSlipModal(invoice.slip_image)}
-                                        className={`p-2 rounded-lg transition-colors ${invoice.slip_image ? 'text-blue-600 hover:bg-blue-50 hover:text-blue-700' : 'text-slate-300 cursor-not-allowed'}`}
-                                        title="ดูสลิปโอนเงิน"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                      </button>
-                                      <button
-                                        disabled={invoice.status === 'paid' || !invoice.slip_image}
-                                        onClick={() => confirmPayment(invoice.invoices_id)}
-                                        className={`p-2 rounded-lg transition-colors ${invoice.status === 'paid' || !invoice.slip_image ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
-                                        title="ยืนยันการชำระเงิน"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                                      </button>
-                                      {invoice.status === 'pending' && (
-                                        <button
-                                          onClick={() => rejectSlip(invoice.invoices_id)}
-                                          className="p-2 rounded-lg transition-colors text-orange-500 hover:bg-orange-50 hover:text-orange-600"
-                                          title="ปฏิเสธสลิป"
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => handlePrint(invoice)}
-                                        className="p-2 rounded-lg transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                                        title="พิมพ์ใบแจ้งหนี้"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                                      </button>
-                                    </>
-                                  )}
-                                  <button
-                                    disabled={invoice.status === 'paid'}
-                                    onClick={() => handleDeleteInvoice(invoice.invoices_id)}
-                                    className={`p-2 rounded-lg transition-colors ${invoice.status === 'paid' ? 'text-slate-300 cursor-not-allowed' : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'}`}
-                                    title="ลบบิล"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                  </button>
-                                </div>
                               </td>
                             </tr>
                           ))
@@ -895,36 +847,224 @@ export default function InvoicesManagementPage() {
                   </div>
                 </div>
               )}
+              </div>
+
+              {/* Right Side: 40% (Sticky Slip Inspector) - Desktop Only */}
+              <div className="hidden lg:block w-full lg:w-[40%]">
+                <div className="sticky top-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 flex flex-col min-h-[500px]">
+                  <h3 className="text-lg font-black text-slate-800 mb-4 tracking-tight flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                    แผงตรวจสลิป
+                  </h3>
+                  
+                  {!selectedInvoice ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-4 opacity-50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                      <p className="font-medium">เลือกบิลเพื่อตรวจสอบและจัดการ</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col h-full">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <p className="text-sm text-slate-500 font-medium">บิลห้อง {selectedInvoice.room_number || '-'}</p>
+                          <p className="text-2xl font-bold text-slate-800">{Number(selectedInvoice.total_amount).toLocaleString()} ฿</p>
+                        </div>
+                        <div>
+                          {getStatusBadge(selectedInvoice)}
+                        </div>
+                      </div>
+
+                      {selectedInvoice.status === 'draft' ? (
+                        <div className="flex-1 flex flex-col items-center justify-center py-10">
+                          <div className="text-slate-400 mb-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2-2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                          </div>
+                          <p className="text-slate-500 font-medium mb-6">บิลนี้ยังเป็นแบบร่าง</p>
+                          
+                          <div className="grid grid-cols-2 gap-3 w-full mt-auto">
+                            <Link
+                              href={`/invoices/editor/${selectedInvoice.invoices_id}`}
+                              className="col-span-2 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2-2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                              แก้ไขแบบร่าง
+                            </Link>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteInvoice(selectedInvoice.invoices_id); }}
+                              className="col-span-2 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:scale-95"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                              ลบบิลแบบร่าง
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="bg-slate-100/50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center mb-6 relative min-h-[250px]">
+                            {selectedInvoice.slip_image ? (
+                              <img src={selectedInvoice.slip_image} alt="Slip" className="max-w-full max-h-[350px] object-contain rounded-xl" />
+                            ) : (
+                              <div className="text-slate-400 flex flex-col items-center py-10">
+                                <span className="text-4xl mb-2 opacity-50">📸</span>
+                                <p className="text-sm font-medium">ไม่มีรูปหลักฐานการโอนเงิน</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 mt-auto">
+                            <button
+                              disabled={selectedInvoice.status === 'paid' || !selectedInvoice.slip_image}
+                              onClick={(e) => { e.stopPropagation(); confirmPayment(selectedInvoice.invoices_id); }}
+                              className={`col-span-2 sm:col-span-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${selectedInvoice.status === 'paid' || !selectedInvoice.slip_image ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 active:scale-95'}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                              ยืนยันการชำระ
+                            </button>
+                            
+                            <button
+                              disabled={!selectedInvoice.slip_image && selectedInvoice.status !== 'pending'}
+                              onClick={(e) => { e.stopPropagation(); rejectSlip(selectedInvoice.invoices_id); }}
+                              className={`col-span-2 sm:col-span-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${(!selectedInvoice.slip_image && selectedInvoice.status !== 'pending') ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:scale-95'}`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+                              ตีกลับ / ส่งใหม่
+                            </button>
+
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handlePrint(selectedInvoice); }}
+                              className="col-span-2 py-3 mt-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 active:scale-95"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                              พิมพ์ใบแจ้งหนี้
+                            </button>
+                            
+                            {selectedInvoice.status !== 'paid' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteInvoice(selectedInvoice.invoices_id); }}
+                                className="col-span-2 py-3 mt-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:scale-95"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                ลบบิลนี้
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </section>
           </div>
 
 
 
-          {/* Slip View Modal */}
-          {isSlipModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsSlipModalOpen(false)}></div>
-              <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh] scale-100 transition-transform">
+          {/* Slip Inspector Modal (Mobile Only) */}
+          {isMobileSlipModalOpen && selectedInvoice && (
+            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center lg:hidden">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileSlipModalOpen(false)}></div>
+              <div className="relative bg-white w-full sm:w-11/12 max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] transition-transform overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95">
+                
                 <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-                    หลักฐานการโอนเงิน
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                    จัดการบิลและสลิป
                   </h3>
                   <button
-                    onClick={() => setIsSlipModalOpen(false)}
+                    onClick={() => setIsMobileSlipModalOpen(false)}
                     className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200/50 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                   </button>
                 </div>
-                <div className="p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-100/50">
-                  {selectedSlipImage ? (
-                    <img src={selectedSlipImage} alt="Slip Preview" className="max-w-full h-auto rounded-xl shadow-sm border border-slate-200" style={{ maxHeight: '60vh', objectFit: 'contain' }} />
-                  ) : (
-                    <div className="text-slate-400 py-10 flex flex-col items-center">
-                      <span className="text-4xl mb-2">📸</span>
-                      <p>ไม่พบรูปภาพ</p>
+                
+                <div className="p-6 overflow-y-auto flex-1 flex flex-col bg-white">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">บิลห้อง {selectedInvoice.room_number || '-'}</p>
+                      <p className="text-2xl font-bold text-slate-800">{Number(selectedInvoice.total_amount).toLocaleString()} ฿</p>
                     </div>
+                    <div>
+                      {getStatusBadge(selectedInvoice)}
+                    </div>
+                  </div>
+
+                  {selectedInvoice.status === 'draft' ? (
+                    <div className="flex-1 flex flex-col items-center justify-center py-10">
+                      <div className="text-slate-400 mb-6">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2-2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </div>
+                      <p className="text-slate-500 font-medium mb-6">บิลนี้ยังเป็นแบบร่าง</p>
+                      
+                      <div className="grid grid-cols-2 gap-3 w-full mt-auto">
+                        <Link
+                          href={`/invoices/editor/${selectedInvoice.invoices_id}`}
+                          onClick={() => setIsMobileSlipModalOpen(false)}
+                          className="col-span-2 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2-2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                          แก้ไขแบบร่าง
+                        </Link>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteInvoice(selectedInvoice.invoices_id); setIsMobileSlipModalOpen(false); }}
+                          className="col-span-2 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:scale-95"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                          ลบบิลแบบร่าง
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-slate-100/50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center mb-6 relative min-h-[250px]">
+                        {selectedInvoice.slip_image ? (
+                          <img src={selectedInvoice.slip_image} alt="Slip" className="max-w-full max-h-[350px] object-contain rounded-xl" />
+                        ) : (
+                          <div className="text-slate-400 flex flex-col items-center py-10">
+                            <span className="text-4xl mb-2 opacity-50">📸</span>
+                            <p className="text-sm font-medium">ไม่มีรูปหลักฐานการโอนเงิน</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mt-auto">
+                        <button
+                          disabled={selectedInvoice.status === 'paid' || !selectedInvoice.slip_image}
+                          onClick={(e) => { e.stopPropagation(); confirmPayment(selectedInvoice.invoices_id); setIsMobileSlipModalOpen(false); }}
+                          className={`col-span-2 sm:col-span-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${selectedInvoice.status === 'paid' || !selectedInvoice.slip_image ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 active:scale-95'}`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                          ยืนยันการชำระ
+                        </button>
+                        
+                        <button
+                          disabled={!selectedInvoice.slip_image && selectedInvoice.status !== 'pending'}
+                          onClick={(e) => { e.stopPropagation(); rejectSlip(selectedInvoice.invoices_id); setIsMobileSlipModalOpen(false); }}
+                          className={`col-span-2 sm:col-span-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${(!selectedInvoice.slip_image && selectedInvoice.status !== 'pending') ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:scale-95'}`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+                          ตีกลับ / ส่งใหม่
+                        </button>
+
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handlePrint(selectedInvoice); setIsMobileSlipModalOpen(false); }}
+                          className="col-span-2 py-3 mt-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 active:scale-95"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                          พิมพ์ใบแจ้งหนี้
+                        </button>
+                        
+                        {selectedInvoice.status !== 'paid' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteInvoice(selectedInvoice.invoices_id); setIsMobileSlipModalOpen(false); }}
+                            className="col-span-2 py-3 mt-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:scale-95"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            ลบบิลนี้
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
