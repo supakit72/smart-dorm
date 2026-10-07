@@ -66,7 +66,7 @@ function InvoiceEditorContent() {
   const [electricMeterCur, setElectricMeterCur] = useState<number | ''>('');
   const [electricRate, setElectricRate] = useState<number | ''>(8);
 
-  const [additionalItems, setAdditionalItems] = useState<{ name: string; price: number; selectionType?: string }[]>([]);
+  const [additionalItems, setAdditionalItems] = useState<{ name: string; price: number; quantity?: number; unit_price?: number; selectionType?: string }[]>([]);
   const [applyVat, setApplyVat] = useState(false);
   const [presets, setPresets] = useState<any[]>([]);
 
@@ -139,7 +139,13 @@ function InvoiceEditorContent() {
             const loadedItems = invoiceData.additional_items || [];
             setAdditionalItems(loadedItems.map((item: any) => {
               const matched = fetchedPresets.find(p => p.name === item.name);
-              return { ...item, selectionType: matched ? String(matched.id) : 'custom' };
+              return { 
+                  ...item, 
+                  selectionType: matched ? String(matched.id) : 'custom',
+                  quantity: item.quantity ?? 1,
+                  unit_price: item.unit_price ?? item.price ?? 0,
+                  price: item.price ?? (item.quantity ?? 1) * (item.unit_price ?? item.price ?? 0)
+              };
             }));
 
             setApplyVat((invoiceData.vat_amount || 0) > 0);
@@ -193,7 +199,7 @@ function InvoiceEditorContent() {
 
   // Add-ons
   const handleAddAdditionalItem = () => {
-    setAdditionalItems([...additionalItems, { name: '', price: 0, selectionType: '' }]);
+    setAdditionalItems([...additionalItems, { name: '', price: 0, quantity: 1, unit_price: 0, selectionType: '' }]);
   };
 
   const handleUpdateAdditionalItemSelect = (index: number, selection: string) => {
@@ -206,16 +212,24 @@ function InvoiceEditorContent() {
       if (preset) {
         newItems[index].selectionType = String(preset.id);
         newItems[index].name = preset.name;
+        newItems[index].quantity = 1;
+        newItems[index].unit_price = preset.price;
         newItems[index].price = preset.price;
       }
     }
     setAdditionalItems(newItems);
   };
 
-  const handleUpdateAdditionalItem = (index: number, field: 'name' | 'price', value: string | number) => {
+  const handleUpdateAdditionalItem = (index: number, field: 'name' | 'quantity' | 'unit_price', value: string | number) => {
     const newItems = [...additionalItems];
-    if (field === 'name') newItems[index].name = value as string;
-    if (field === 'price') newItems[index].price = Number(value);
+    if (field === 'name') {
+        newItems[index].name = value as string;
+    } else {
+        newItems[index][field] = Number(value);
+        const qty = newItems[index].quantity || 1;
+        const up = newItems[index].unit_price || 0;
+        newItems[index].price = qty * up;
+    }
     setAdditionalItems(newItems);
   };
   const handleRemoveAdditionalItem = (index: number) => {
@@ -306,7 +320,7 @@ function InvoiceEditorContent() {
   const totals = calculateTotal();
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-24">
+    <div className="max-w-7xl mx-auto space-y-6 pb-32">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/invoices" className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors text-slate-500 hover:text-slate-700">
@@ -490,13 +504,25 @@ function InvoiceEditorContent() {
                         />
                       )}
                     </div>
-                    <div className="w-full sm:w-40 relative">
+                    <div className="w-full sm:w-28 relative">
                       <input
-                        type="number" value={item.price} placeholder="ราคา"
-                        onChange={(e) => handleUpdateAdditionalItem(index, 'price', e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-white font-bold text-slate-700 pr-10"
+                        type="number" value={item.quantity ?? 1} placeholder="จำนวน" min={1}
+                        onChange={(e) => handleUpdateAdditionalItem(index, 'quantity', e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-white font-bold text-slate-700"
+                        title="จำนวน"
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">฿</span>
+                    </div>
+                    <div className="w-full sm:w-32 relative">
+                      <input
+                        type="number" value={item.unit_price ?? item.price ?? 0} placeholder="ราคา/หน่วย"
+                        onChange={(e) => handleUpdateAdditionalItem(index, 'unit_price', e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-white font-bold text-slate-700 pr-8"
+                        title="ราคาต่อหน่วย"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">฿</span>
+                    </div>
+                    <div className="w-full sm:w-32 bg-white px-4 py-2.5 rounded-xl border border-slate-200 text-right font-black text-blue-700">
+                       {item.price?.toLocaleString()} ฿
                     </div>
                     <button
                       type="button" onClick={() => handleRemoveAdditionalItem(index)}
@@ -598,18 +624,18 @@ function InvoiceEditorContent() {
       </div>
 
       {/* Action Bar (Sticky Bottom) */}
-      <div className="fixed bottom-0 left-0 right-0 lg:left-64 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+      <div className="fixed bottom-0 left-0 right-0 lg:left-64 bg-white border-t border-gray-200 p-3 sm:p-4 z-40 shadow-lg flex items-center justify-between">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-2 sm:gap-4">
           <div className="hidden sm:block">
             <p className="text-sm font-bold text-slate-500">สถานะ: {isNew ? 'ร่างใหม่' : 'กำลังแก้ไขแบบร่าง'}</p>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <button
               disabled={submitting}
               onClick={() => handleSave('draft')}
-              className="flex-1 sm:flex-none px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-all disabled:opacity-50"
             >
-              บันทึกแบบร่าง (Draft)
+              บันทึกแบบร่าง
             </button>
             <button
               disabled={submitting}

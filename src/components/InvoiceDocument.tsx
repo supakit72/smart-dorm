@@ -119,7 +119,14 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
     };
 
     return (
-      <div className="max-w-[21cm] mx-auto bg-white p-6 md:p-12 text-black font-sans text-sm">
+      <>
+        <style dangerouslySetInnerHTML={{__html: `
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm;
+          }
+        `}} />
+        <div className="max-w-[21cm] mx-auto bg-white p-6 md:p-12 text-black font-sans text-sm">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start mb-6 border-b-2 border-black pb-6 gap-4">
           <div>
@@ -156,7 +163,7 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left mb-6 border-collapse min-w-[600px]">
+          <table className="w-full text-left mb-3 border-collapse min-w-[600px]">
             <thead className="border-y-2 border-black">
               <tr>
                 <th className="py-2 px-2 font-bold w-1/3">รายการ</th>
@@ -169,15 +176,15 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
             </thead>
             <tbody className="divide-y divide-gray-300 border-b-2 border-black">
               <tr>
-                <td className="py-3 px-2">ค่าเช่าห้องพัก</td>
-                <td className="py-3 px-2 text-center">{roomRent.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                <td className="py-3 px-2 text-center">1 เดือน</td>
-                <td className="py-3 px-2 text-right">{roomRent.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                {showTaxColumn && <td className="py-3 px-2 text-right">0.00</td>}
-                <td className="py-3 px-2 text-right font-medium">{roomRent.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td className="py-1.5 px-2">ค่าเช่าห้องพัก</td>
+                <td className="py-1.5 px-2 text-center">{roomRent.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td className="py-1.5 px-2 text-center">1 เดือน</td>
+                <td className="py-1.5 px-2 text-right">{roomRent.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                {showTaxColumn && <td className="py-1.5 px-2 text-right">0.00</td>}
+                <td className="py-1.5 px-2 text-right font-medium">{roomRent.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
               </tr>
               <tr>
-                <td className="py-3 px-2">
+                <td className="py-1.5 px-2">
                   ค่าน้ำประปา
                   <div className="text-xs text-gray-600 mt-0.5 font-normal">
                     ({getMeterCycle(invoice.month_year, dormSettings?.meter_reading_day || 20)})
@@ -188,14 +195,14 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
                     </div>
                   )}
                 </td>
-                <td className="py-3 px-2 text-center">{Number(invoice.water_rate).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                <td className="py-3 px-2 text-center">{invoice.water_unit} หน่วย</td>
-                <td className="py-3 px-2 text-right">{wTotal.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                {showTaxColumn && <td className="py-3 px-2 text-right">{wVat.toLocaleString(undefined, {minimumFractionDigits:2})}</td>}
-                <td className="py-3 px-2 text-right font-medium">{(wTotal + wVat).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td className="py-1.5 px-2 text-center">{Number(invoice.water_rate).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td className="py-1.5 px-2 text-center">{invoice.water_unit} หน่วย</td>
+                <td className="py-1.5 px-2 text-right">{wTotal.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                {showTaxColumn && <td className="py-1.5 px-2 text-right">{wVat.toLocaleString(undefined, {minimumFractionDigits:2})}</td>}
+                <td className="py-1.5 px-2 text-right font-medium">{(wTotal + wVat).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
               </tr>
               <tr>
-                <td className="py-3 px-2">
+                <td className="py-1.5 px-2">
                   ค่าไฟฟ้า
                   <div className="text-xs text-gray-600 mt-0.5 font-normal">
                     ({getMeterCycle(invoice.month_year, dormSettings?.meter_reading_day || 20)})
@@ -206,20 +213,20 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
                     </div>
                   )}
                 </td>
-                <td className="py-3 px-2 text-center">{Number(invoice.electric_rate).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                <td className="py-3 px-2 text-center">{invoice.electric_unit} หน่วย</td>
-                <td className="py-3 px-2 text-right">{eTotal.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                {showTaxColumn && <td className="py-3 px-2 text-right">{eVat.toLocaleString(undefined, {minimumFractionDigits:2})}</td>}
-                <td className="py-3 px-2 text-right font-medium">{(eTotal + eVat).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td className="py-1.5 px-2 text-center">{Number(invoice.electric_rate).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td className="py-1.5 px-2 text-center">{invoice.electric_unit} หน่วย</td>
+                <td className="py-1.5 px-2 text-right">{eTotal.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                {showTaxColumn && <td className="py-1.5 px-2 text-right">{eVat.toLocaleString(undefined, {minimumFractionDigits:2})}</td>}
+                <td className="py-1.5 px-2 text-right font-medium">{(eTotal + eVat).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
               </tr>
               {addItems.map((item: any, idx: number) => (
                 <tr key={idx}>
-                  <td className="py-3 px-2">{item.name}</td>
-                  <td className="py-3 px-2 text-center">-</td>
-                  <td className="py-3 px-2 text-center">-</td>
-                  <td className="py-3 px-2 text-right">{Number(item.price).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                  {showTaxColumn && <td className="py-3 px-2 text-right">0.00</td>}
-                  <td className="py-3 px-2 text-right font-medium">{Number(item.price).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td className="py-1.5 px-2">{item.name}</td>
+                  <td className="py-1.5 px-2 text-center">{Number(item.unit_price ?? item.price ?? 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td className="py-1.5 px-2 text-center">{item.quantity ?? 1} รายการ</td>
+                  <td className="py-1.5 px-2 text-right">{Number(item.price ?? 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  {showTaxColumn && <td className="py-1.5 px-2 text-right">0.00</td>}
+                  <td className="py-1.5 px-2 text-right font-medium">{Number(item.price ?? 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                 </tr>
               ))}
             </tbody>
@@ -264,7 +271,7 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
         </div>
 
         {/* Payment Info & Signatures */}
-        <div className="mt-8 border border-gray-300 rounded-lg p-6 flex items-start gap-4 mb-8 break-inside-avoid">
+        <div className="mt-3 border border-gray-300 rounded-lg p-3.5 flex items-start gap-4 mb-3 break-inside-avoid">
           <div className="text-3xl mt-1">🏦</div>
           <div>
             <p className="font-bold text-black mb-1 text-base">ช่องทางการชำระเงิน (โอนเข้าบัญชี)</p>
@@ -275,29 +282,28 @@ export default function InvoiceDocument({ invoice, dormSettings }: InvoiceDocume
         </div>
 
         {dormSettings?.invoice_footer_text && (
-          <div className="mt-4 mb-8 text-sm text-gray-700 whitespace-pre-wrap break-inside-avoid">
+          <div className="mt-2 mb-2 text-sm text-gray-700 whitespace-pre-wrap break-inside-avoid">
             <p className="font-bold text-black mb-1">หมายเหตุ:</p>
             {dormSettings.invoice_footer_text}
           </div>
         )}
 
-        <div className="flex justify-between items-end pt-8 border-t border-black break-inside-avoid">
+        <div className="flex justify-between items-end pt-3 border-t border-black break-inside-avoid">
           <div className="text-center w-40 sm:w-56">
-            <div className="border-b border-black mb-2 h-8"></div>
-            {dormSettings?.invoice_signature_name ? (
-              <p className="font-medium text-black">{dormSettings.invoice_signature_name}</p>
-            ) : (
-              <p className="font-medium text-black">ผู้รับเงิน / ผู้แจ้งหนี้</p>
-            )}
+            <div className="border-b border-black mb-2 h-6"></div>
+            <p className="text-sm font-medium text-black">({dormSettings?.invoice_signature_name || '...........................................'})</p>
+            <p className="font-medium text-black mt-1">ผู้จัดการหอพัก</p>
             <p className="text-sm text-gray-600 mt-1">วันที่ _______/_______/_______</p>
           </div>
           <div className="text-center w-40 sm:w-56">
-            <div className="border-b border-black mb-2 h-8"></div>
-            <p className="font-medium text-black">ผู้เช่า / ผู้ชำระเงิน</p>
+            <div className="border-b border-black mb-2 h-6"></div>
+            <p className="text-sm font-medium text-black">({invoice?.tenant_name || invoice?.contracts?.tenants?.name || (invoice?.contracts?.users?.first_name ? `${invoice.contracts.users.first_name} ${invoice.contracts.users.last_name || ''}`.trim() : null) || '...........................................'})</p>
+            <p className="font-medium text-black mt-1">ผู้เช่า / ผู้ชำระเงิน</p>
             <p className="text-sm text-gray-600 mt-1">วันที่ _______/_______/_______</p>
           </div>
         </div>
         
       </div>
+      </>
     );
 }

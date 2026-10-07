@@ -146,24 +146,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* 3. Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-2 flex justify-around items-center z-50 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)] pb-safe">
-        {bottomNavItems.map((item) => {
-          const isActive = checkIsActive(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl min-w-[64px] transition-all duration-200 ${isActive ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              <div className={`transition-transform duration-200 ${isActive ? '-translate-y-1' : ''}`}>
-                {React.cloneElement(item.icon, { width: 22, height: 22, className: isActive ? 'drop-shadow-sm' : '' })}
-              </div>
-              <span className={`text-[10px] font-bold ${isActive ? 'opacity-100' : 'opacity-80'}`}>{item.shortLabel || item.label}</span>
-              {isActive && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-blue-600"></div>}
-            </Link>
-          )
-        })}
-      </nav>
+      {!pathname.startsWith('/invoices/editor') && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-2 flex justify-around items-center z-50 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)] pb-safe">
+          {bottomNavItems.map((item) => {
+            const isActive = checkIsActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl min-w-[64px] transition-all duration-200 ${isActive ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <div className={`transition-transform duration-200 ${isActive ? '-translate-y-1' : ''}`}>
+                  {React.cloneElement(item.icon, { width: 22, height: 22, className: isActive ? 'drop-shadow-sm' : '' })}
+                </div>
+                <span className={`text-[10px] font-bold ${isActive ? 'opacity-100' : 'opacity-80'}`}>{item.shortLabel || item.label}</span>
+                {isActive && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-blue-600"></div>}
+              </Link>
+            )
+          })}
+        </nav>
+      )}
 
       {/* 4. Mobile Drawer (สำหรับเมนูย่อยที่เหลือ) */}
       {mobileMenuOpen && (

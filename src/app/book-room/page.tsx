@@ -15,12 +15,12 @@ export default function BookRoomPage() {
 
     const [rooms, setRooms] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    
+
     // User State
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userUid, setUserUid] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
-    
+
     // Guest Form State
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -57,7 +57,7 @@ export default function BookRoomPage() {
             if (session) {
                 setIsLoggedIn(true);
                 setUserUid(session.user.id);
-                
+
                 const { data: userData } = await supabase
                     .from('users')
                     .select('user_id, first_name, last_name, phone_number')
@@ -184,7 +184,7 @@ export default function BookRoomPage() {
 
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selected = e.target.value;
-        
+
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(today.getDate() + 1);
@@ -231,7 +231,7 @@ export default function BookRoomPage() {
             async () => {
                 try {
                     setIsSubmitting(true);
-                    
+
                     let currentUserUid = userUid;
                     let currentUserId = userId;
 
@@ -250,9 +250,9 @@ export default function BookRoomPage() {
                         });
 
                         if (signUpError) throw signUpError;
-                        
+
                         currentUserUid = authData.user?.id || null;
-                        
+
                         if (currentUserUid) {
                             const { data: newUser, error: insertUserError } = await supabase
                                 .from('users')
@@ -266,7 +266,7 @@ export default function BookRoomPage() {
                                 }])
                                 .select('user_id')
                                 .single();
-                                
+
                             if (insertUserError) throw insertUserError;
                             currentUserId = newUser.user_id;
                         }
@@ -308,7 +308,7 @@ export default function BookRoomPage() {
 
                     showAlert('success', 'สำเร็จ!', 'ระบบได้รับข้อมูลการจองของคุณแล้ว กำลังพาท่านไปยังหน้าติดตามสถานะ');
                     setIsModalOpen(false);
-                    
+
                     // Redirect to tenant page
                     router.push('/tenant');
 
@@ -327,7 +327,7 @@ export default function BookRoomPage() {
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
     const minDateStr = tomorrow.toISOString().split('T')[0];
-    
+
     const maxDate = new Date(today);
     maxDate.setDate(today.getDate() + maxBookingDays);
     const maxDateStr = maxDate.toISOString().split('T')[0];
@@ -350,7 +350,7 @@ export default function BookRoomPage() {
                         {!isLoggedIn ? (
                             <Link href="/login?redirect=/book-room" className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm flex items-center gap-2 border border-blue-100">
                                 เข้าสู่ระบบ <span className="hidden sm:inline">(ผู้เช่า/ผู้ดูแล)</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
                             </Link>
                         ) : (
                             <Link href={userUid ? "/tenant" : "/admin"} className="px-5 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm border border-slate-200">
@@ -395,18 +395,18 @@ export default function BookRoomPage() {
                                             ว่าง
                                         </span>
                                     </div>
-                                    
+
                                     <div className="space-y-2 mb-6 text-sm">
                                         <div className="flex items-center text-slate-600">
-                                            <span className="w-6 text-center mr-2">🏢</span> 
+                                            <span className="w-6 text-center mr-2">🏢</span>
                                             <span className="font-medium">ชั้น {room.floor}</span>
                                         </div>
                                         <div className="flex items-center text-slate-600">
-                                            <span className="w-6 text-center mr-2">🛏️</span> 
+                                            <span className="w-6 text-center mr-2">🛏️</span>
                                             <span className="font-medium">{room.room_types?.name || 'ประเภทห้องปกติ'}</span>
                                         </div>
                                         <div className="flex items-center text-slate-600">
-                                            <span className="w-6 text-center mr-2">💧</span> 
+                                            <span className="w-6 text-center mr-2">💧</span>
                                             <span className="font-medium">ค่าน้ำ {waterRate} ฿/หน่วย, ไฟ {electricRate} ฿/หน่วย</span>
                                         </div>
                                     </div>
@@ -445,10 +445,10 @@ export default function BookRoomPage() {
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
-                        
+
                         <div className="p-6 overflow-y-auto custom-scrollbar">
                             <form id="booking-form" onSubmit={handleSubmitBooking} className="space-y-8">
-                                
+
                                 {/* Info Box with Rules */}
                                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm space-y-3">
                                     <div className="flex gap-3">
@@ -498,7 +498,7 @@ export default function BookRoomPage() {
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {/* Always display user info if logged in */}
                                 {isLoggedIn && (
                                     <div className="space-y-4">
@@ -518,14 +518,14 @@ export default function BookRoomPage() {
                                 {/* Step 2: Date */}
                                 <div className="space-y-4">
                                     <h4 className="font-black text-slate-800 text-lg border-b border-slate-100 pb-2">2. เลือกวันนัดหมาย</h4>
-                                    <input 
-                                        type="date" 
-                                        required 
-                                        value={appointmentDate} 
+                                    <input
+                                        type="date"
+                                        required
+                                        value={appointmentDate}
                                         onChange={handleDateChange}
                                         min={minDateStr}
                                         max={maxDateStr}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-medium text-slate-700 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all cursor-pointer" 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-medium text-slate-700 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all cursor-pointer"
                                     />
                                     {unavailableDates.length > 0 && (
                                         <p className="text-xs text-rose-500 font-medium">*ไม่สามารถเลือกวันเหล่านี้ได้: {unavailableDates.join(', ')}</p>
@@ -535,16 +535,16 @@ export default function BookRoomPage() {
                                 {/* Step 3: Payment */}
                                 <div className="space-y-4">
                                     <h4 className="font-black text-slate-800 text-lg border-b border-slate-100 pb-2">3. สแกนชำระเงินมัดจำ {bookingDepositAmount} บาท</h4>
-                                    
+
                                     <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-stretch">
                                         {/* QR Code Placeholder (Uses promptpay.io if bankAccountNo exists, else generic) */}
                                         <div className="w-48 h-48 bg-white border-2 border-slate-200 rounded-2xl flex flex-col items-center justify-center p-2 shadow-sm shrink-0">
                                             {promptpayId ? (
                                                 <div className="flex flex-col items-center justify-center w-full h-full p-2">
-                                                    <QRCodeSVG 
-                                                        value={generatePayload(promptpayId, { amount: Number(bookingDepositAmount) })} 
-                                                        size={140} 
-                                                        level="M" 
+                                                    <QRCodeSVG
+                                                        value={generatePayload(promptpayId, { amount: Number(bookingDepositAmount) })}
+                                                        size={140}
+                                                        level="M"
                                                         includeMargin={true}
                                                     />
                                                     <p className="mt-2 text-[10px] text-slate-500 text-center font-medium leading-tight">
@@ -552,9 +552,9 @@ export default function BookRoomPage() {
                                                     </p>
                                                 </div>
                                             ) : (
-                                                <img 
-                                                    src={`https://promptpay.io/${bankAccountNo || '0000000000'}/${bookingDepositAmount}.png`} 
-                                                    alt="PromptPay QR" 
+                                                <img
+                                                    src={`https://promptpay.io/${bankAccountNo || '0000000000'}/${bookingDepositAmount}.png`}
+                                                    alt="PromptPay QR"
                                                     className="w-full h-full object-contain"
                                                     onError={(e) => {
                                                         // Fallback if promptpay fails
@@ -564,7 +564,7 @@ export default function BookRoomPage() {
                                                 />
                                             )}
                                         </div>
-                                        
+
                                         <div className="flex-1 space-y-4 w-full">
                                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
                                                 <div>
@@ -596,7 +596,7 @@ export default function BookRoomPage() {
                                                 </div>
                                             ) : (
                                                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer text-blue-600 active:scale-[0.98]">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mb-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mb-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                                                     <span className="font-bold text-sm">อัปโหลดสลิปเงินโอน</span>
                                                     <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} required />
                                                 </label>
@@ -608,15 +608,15 @@ export default function BookRoomPage() {
                         </div>
 
                         <div className="p-5 border-t border-slate-100 bg-slate-50/50 sticky bottom-0 z-10 flex flex-col-reverse sm:flex-row gap-3 rounded-b-[2rem]">
-                            <button 
+                            <button
                                 type="button"
-                                onClick={() => setIsModalOpen(false)} 
+                                onClick={() => setIsModalOpen(false)}
                                 disabled={isSubmitting}
                                 className="w-full sm:w-auto px-6 py-3.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors active:scale-95 disabled:opacity-50"
                             >
                                 ยกเลิก
                             </button>
-                            <button 
+                            <button
                                 type="submit"
                                 form="booking-form"
                                 disabled={isSubmitting}

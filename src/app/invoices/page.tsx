@@ -526,11 +526,32 @@ export default function InvoicesManagementPage() {
     XLSX.writeFile(workbook, `รายงานบิลค่าเช่า_${dateStr}.xlsx`);
   };
 
-  const handlePrint = (invoice: any) => {
-    setInvoiceToPrint(invoice);
-    setTimeout(() => {
-      window.print();
-    }, 100);
+  const handlePrint = async (invoiceView: any) => {
+    try {
+      setLoading(true);
+      const { data: fullInvoice, error } = await supabase
+        .from('invoices')
+        .select('*, contracts(rooms(room_number, price_per_month), users!contracts_tenant_id_fkey(first_name, last_name))')
+        .eq('invoices_id', invoiceView.invoices_id)
+        .single();
+        
+      if (error) throw error;
+      
+      const printData = {
+        ...fullInvoice,
+        room_number: invoiceView.room_number || fullInvoice.contracts?.rooms?.room_number
+      };
+      
+      setInvoiceToPrint(printData);
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    } catch (err) {
+      console.error("Print fetch error:", err);
+      alert("ไม่สามารถดึงข้อมูลสำหรับพิมพ์ได้");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -541,19 +562,19 @@ export default function InvoicesManagementPage() {
 
             {/* Section 1: Dashboard Top */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-slate-800 tracking-tight">สถานะการออกบิล (เดือนปัจจุบัน)</h2>
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-bold sm:text-2xl sm:font-bold text-slate-800 tracking-tight">สถานะการออกบิล (เดือนปัจจุบัน)</h2>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => setIsSettingsModalOpen(true)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     ตั้งค่ารอบบิล
                   </button>
                   <Link
                     href="/invoices/editor/new"
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 whitespace-nowrap"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 whitespace-nowrap"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     ออกบิลใหม่
@@ -1124,7 +1145,7 @@ export default function InvoicesManagementPage() {
 
       {/* Print Layout */}
       {invoiceToPrint && (
-        <div className="hidden print:block fixed inset-0 z-[9999] bg-white text-black p-0 m-0 font-sans text-sm h-screen overflow-visible">
+        <div className="hidden print:block absolute inset-0 z-[9999] bg-white text-black p-0 m-0 font-sans text-sm min-h-screen overflow-visible">
           <InvoiceDocument invoice={invoiceToPrint} dormSettings={dormSettings} />
         </div>
       )}
