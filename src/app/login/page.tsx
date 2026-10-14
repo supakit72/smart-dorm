@@ -30,41 +30,54 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // 2. ดึงข้อมูล role จากตาราง users
-        const { data: userData, error: userError } = await supabase
+        // 2. ดึงข้อมูลโปรไฟล์ผู้ใช้จากตาราง 'users' เพื่อตรวจสอบ 'role'
+        const { data: profile, error: userError } = await supabase
           .from('users')
-          .select('role, force_password_change')
+          .select('user_id, role, force_password_change')
           .eq('user_uid', data.user.id)
           .single();
 
-        if (userError || !userData) {
-          console.error("Error fetching user role:", userError);
+        if (userError || !profile) {
+          console.error("Error fetching user profile:", userError);
           throw new Error("ไม่พบสิทธิ์การใช้งานในระบบ");
         }
 
-        if (userData.force_password_change) {
+        if (profile.force_password_change) {
           router.push('/force-change-password');
           return;
         }
 
-        // 3. แยกสิทธิ์การใช้งาน (Role Routing)
-        const params = new URLSearchParams(window.location.search);
-        const redirectUrl = params.get('redirect');
-        const roomId = params.get('roomId');
-
-        let targetUrl = redirectUrl;
-        if (targetUrl && roomId) {
-          targetUrl += `?roomId=${roomId}`;
+        // --- ตรรกะตรวจเช็คและคัดแยกสิทธิ์หลังล็อคอินสำเร็จ ---
+        const searchParams = new URLSearchParams(window.location.search);
+        let redirectParam = searchParams.get('redirect');
+        const roomId = searchParams.get('roomId');
+        if (redirectParam && roomId && !redirectParam.includes('roomId=')) {
+          redirectParam += `?roomId=${roomId}`;
         }
 
-        if (targetUrl) {
-          router.push(targetUrl);
-        } else if (userData.role === 'admin') {
+        if (profile.role === 'admin') {
+          // ถ้าเป็นผู้ดูแลระบบ (Admin) ต้องบังคับไปหน้า Dashboard หลัก (/) เสมอ
           router.push('/');
-        } else if (userData.role === 'tenant') {
-          router.push('/tenant');
+        } else if (profile.role === 'tenant') {
+          // 2. ถ้าเป็นผู้เช่า (Tenant) ให้ตรวจสอบในตาราง 'contracts' ว่ามีสัญญาเช่าที่กำลังใช้งาน (is_active = true) หรือไม่
+          const { data: activeContract } = await supabase
+            .from('contracts')
+            .select('contracts_id')
+            .or(`tenant_id.eq.${profile.user_id},tenant_uid.eq.${data.user.id}`)
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle();
+
+          if (activeContract) {
+            // หากผู้เช่ามีห้องพัก (มีสัญญาเช่า) อยู่แล้ว ให้ไปหน้า Dashboard ของผู้เช่า (/tenant) เท่านั้น
+            router.push('/tenant');
+          } else {
+            // หากเป็นผู้เช่าใหม่ที่ยังไม่มีห้อง ให้ไปหน้าที่มี Query redirect (เช่น /book-room) หรือถ้าไม่มีให้ไป /tenant
+            router.push(redirectParam || '/tenant');
+          }
         } else {
-          setErrorMsg("สิทธิ์การใช้งานของคุณไม่ถูกต้อง");
+          // บุคคลทั่วไป หรือ สิทธิ์อื่น ๆ
+          router.push(redirectParam || '/book-room');
         }
       }
     } catch (err: any) {

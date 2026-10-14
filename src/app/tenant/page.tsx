@@ -65,6 +65,20 @@ export default function TenantDashboard() {
     const [copiedBank, setCopiedBank] = useState(false);
     const qrRef = useRef<HTMLDivElement>(null);
 
+    // Profile & Change Password Modal States
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [tenantFirstName, setTenantFirstName] = useState('');
+    const [tenantLastName, setTenantLastName] = useState('');
+    const [tenantPhone, setTenantPhone] = useState('');
+    const [tenantRoomNumber, setTenantRoomNumber] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
+    const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
     // อ้างอิงถึง input file ที่ซ่อนไว้
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,11 +90,16 @@ export default function TenantDashboard() {
             // 1. หา UUID (user_id) ในตาราง users
             const { data: userRecord, error: userError } = await supabase
                 .from('users')
-                .select('user_id, first_name, last_name')
+                .select('user_id, first_name, last_name, phone_number')
                 .eq('user_uid', uid)
                 .single();
 
             if (userError || !userRecord) throw new Error('ไม่พบข้อมูลผู้ใช้งาน');
+
+            setTenantFirstName(userRecord.first_name || '');
+            setTenantLastName(userRecord.last_name || '');
+            setTenantPhone(userRecord.phone_number || '');
+            setUserName(`${userRecord.first_name || ''} ${userRecord.last_name || ''}`.trim());
 
             // 2. หาสัญญาเช่าปัจจุบัน และ Join ข้อมูลห้อง
             const { data: contract, error: contractError } = await supabase
@@ -114,14 +133,17 @@ export default function TenantDashboard() {
                     
                 if (bookingData) {
                     setActiveBooking(bookingData);
+                    setTenantRoomNumber((bookingData.rooms as any)?.room_number ? `${(bookingData.rooms as any).room_number} (อยู่ระหว่างจอง)` : '-');
                 } else {
                     setActiveBooking(null);
+                    setTenantRoomNumber('ยังไม่มีห้องพัก');
                 }
                 
                 return;
             } else {
                 setHasRoom(true);
                 setActiveBooking(null);
+                setTenantRoomNumber((contract.rooms as any)?.room_number || '-');
             }
 
             // 3. หาบิลทั้งหมดจากตาราง invoices โดยตรง (ตัดบิลร่างทิ้ง) เรียงจากใหม่ไปเก่า
@@ -186,7 +208,7 @@ export default function TenantDashboard() {
 
             const { data: userData } = await supabase
                 .from('users')
-                .select('role, first_name, last_name')
+                .select('role, first_name, last_name, phone_number')
                 .eq('user_uid', session.user.id)
                 .single();
 
@@ -196,6 +218,9 @@ export default function TenantDashboard() {
             }
 
             setUserName(`${userData.first_name || ''} ${userData.last_name || ''}`.trim());
+            setTenantFirstName(userData.first_name || '');
+            setTenantLastName(userData.last_name || '');
+            setTenantPhone(userData.phone_number || '');
 
             const { data: settings } = await supabase
                 .from('dorm_settings')
@@ -269,6 +294,45 @@ export default function TenantDashboard() {
         } catch (err: any) {
             console.error("Logout Error:", err);
             alert("ไม่สามารถออกจากระบบได้: " + err.message);
+        }
+    };
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordError(null);
+        setPasswordSuccess(null);
+
+        if (!newPassword || newPassword.length < 6) {
+            setPasswordError('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordError('รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน');
+            return;
+        }
+
+        try {
+            setIsChangingPassword(true);
+            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+            if (updateError) throw updateError;
+
+            setPasswordSuccess('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว กำลังนำคุณออกจากระบบ...');
+
+            // หน่วงเวลา 1.8 วินาที เพื่อให้ผู้ใช้อ่านข้อความแจ้งเตือน ก่อน Sign Out และ Redirect
+            setTimeout(async () => {
+                try {
+                    await supabase.auth.signOut();
+                } catch (signOutErr) {
+                    console.error('Sign out error after password change:', signOutErr);
+                } finally {
+                    router.push('/login');
+                }
+            }, 1800);
+        } catch (err: any) {
+            console.error('Update password error:', err);
+            setPasswordError(err.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง');
+            setIsChangingPassword(false);
         }
     };
 
@@ -634,19 +698,38 @@ export default function TenantDashboard() {
             {/* Header (Tenant Profile & Room Info) */}
             <header className="bg-white border-b border-slate-200/60 sticky top-0 z-20 shadow-sm pt-safe">
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-500/30 uppercase">
+                    <button
+                        type="button"
+                        onClick={() => setIsProfileModalOpen(true)}
+                        className="flex items-center gap-3 text-left hover:opacity-85 transition-opacity cursor-pointer group"
+                        title="ดูข้อมูลส่วนตัวและเปลี่ยนรหัสผ่าน"
+                    >
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-500/30 uppercase group-hover:scale-105 transition-transform">
                             {userName ? userName.charAt(0) : 'T'}
                         </div>
                         <div>
-                            <h1 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">ผู้เช่า</h1>
-                            <p className="text-base font-black text-slate-800 leading-none">{userName || 'ผู้เช่า'}</p>
+                            <div className="flex items-center gap-1.5">
+                                <h1 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">ผู้เช่า</h1>
+                                <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-semibold hidden sm:inline-block">โปรไฟล์</span>
+                            </div>
+                            <p className="text-base font-black text-slate-800 leading-none mt-0.5 group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                                <span>{userName || 'ผู้เช่า'}</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:text-blue-600 transition-colors"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </p>
                         </div>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-2">
                         <button
+                            type="button"
+                            onClick={() => setIsProfileModalOpen(true)}
+                            className="p-2.5 rounded-xl bg-slate-50 text-slate-600 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 transition-colors shadow-sm active:scale-95 flex items-center justify-center cursor-pointer"
+                            title="ข้อมูลส่วนตัวและเปลี่ยนรหัสผ่าน"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </button>
+                        <button
                             onClick={handleLogout}
-                            className="p-2.5 rounded-xl bg-slate-50 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors shadow-sm active:scale-95 flex items-center justify-center"
+                            className="p-2.5 rounded-xl bg-slate-50 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors shadow-sm active:scale-95 flex items-center justify-center cursor-pointer"
                             title="ออกจากระบบ"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
@@ -1289,6 +1372,172 @@ export default function TenantDashboard() {
                                     ปิด/ไม่ยกเลิก
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Profile & Change Password Modal */}
+            {isProfileModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-auto border border-slate-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                        {/* Modal Header */}
+                        <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur z-10 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-slate-800 tracking-tight">โปรไฟล์และเปลี่ยนรหัสผ่าน</h3>
+                                    <p className="text-xs text-slate-400">ข้อมูลบัญชีผู้เช่าและความปลอดภัย</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={isChangingPassword}
+                                onClick={() => {
+                                    if (isChangingPassword) return;
+                                    setIsProfileModalOpen(false);
+                                    setPasswordError(null);
+                                    setPasswordSuccess(null);
+                                    setNewPassword('');
+                                    setConfirmPassword('');
+                                }}
+                                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="ปิด"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 overflow-y-auto space-y-6">
+                            {/* ส่วนที่ 1: ข้อมูลส่วนตัว (Read-Only) */}
+                            <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200/70 space-y-3.5">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <span>👤</span> ข้อมูลส่วนตัว
+                                    </h4>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-md">อ่านอย่างเดียว</span>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อ - นามสกุล</label>
+                                    <input
+                                        type="text"
+                                        disabled
+                                        value={`${tenantFirstName} ${tenantLastName}`.trim() || userName || '-'}
+                                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-semibold cursor-not-allowed select-none"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">เบอร์โทรศัพท์</label>
+                                        <input
+                                            type="text"
+                                            disabled
+                                            value={tenantPhone || '-'}
+                                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-semibold cursor-not-allowed select-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">เลขห้องพัก</label>
+                                        <input
+                                            type="text"
+                                            disabled
+                                            value={tenantRoomNumber ? (tenantRoomNumber.includes('ห้อง') ? tenantRoomNumber : `ห้อง ${tenantRoomNumber}`) : (invoice?.room_number ? `ห้อง ${invoice.room_number}` : '-')}
+                                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-semibold cursor-not-allowed select-none text-emerald-700 font-black"
+                                        />
+                                    </div>
+                                </div>
+
+                                <p className="text-[11px] text-amber-600 font-medium flex items-center gap-1.5 pt-1">
+                                    <span>ℹ️</span> *หากต้องการแก้ไขข้อมูลส่วนตัว กรุณาติดต่อผู้ดูแลหอพัก
+                                </p>
+                            </div>
+
+                            {/* ส่วนที่ 2: เปลี่ยนรหัสผ่าน */}
+                            <form onSubmit={handleChangePassword} className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
+                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>🔒</span> เปลี่ยนรหัสผ่านใหม่
+                                </h4>
+
+                                {passwordSuccess && (
+                                    <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                                        <span>✓</span> {passwordSuccess}
+                                    </div>
+                                )}
+
+                                {passwordError && (
+                                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                                        <span>⚠️</span> {passwordError}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร) <span className="text-rose-500">*</span></label>
+                                    <div className="relative">
+                                        <input
+                                            type={showNewPassword ? "text" : "password"}
+                                            value={newPassword}
+                                            onChange={e => setNewPassword(e.target.value)}
+                                            disabled={isChangingPassword}
+                                            placeholder="••••••••"
+                                            minLength={6}
+                                            required
+                                            className="w-full px-3.5 py-2.5 pr-14 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={isChangingPassword}
+                                            onClick={() => setShowNewPassword(!showNewPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            {showNewPassword ? 'ซ่อน' : 'แสดง'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">ยืนยันรหัสผ่านใหม่ <span className="text-rose-500">*</span></label>
+                                    <div className="relative">
+                                        <input
+                                            type={showConfirmPassword ? "text" : "password"}
+                                            value={confirmPassword}
+                                            onChange={e => setConfirmPassword(e.target.value)}
+                                            disabled={isChangingPassword}
+                                            placeholder="••••••••"
+                                            minLength={6}
+                                            required
+                                            className="w-full px-3.5 py-2.5 pr-14 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={isChangingPassword}
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            {showConfirmPassword ? 'ซ่อน' : 'แสดง'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isChangingPassword || !newPassword || !confirmPassword}
+                                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/20 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none flex items-center justify-center gap-2 text-sm active:scale-[0.99] cursor-pointer"
+                                >
+                                    {isChangingPassword ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <span>{passwordSuccess ? 'กำลังออกจากระบบ...' : 'กำลังบันทึก...'}</span>
+                                        </>
+                                    ) : (
+                                        <span>บันทึกการเปลี่ยนรหัสผ่าน</span>
+                                    )}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>

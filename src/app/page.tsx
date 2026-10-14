@@ -247,7 +247,7 @@ export default function AdminDashboard() {
   }, []);
 
   // Loading & Error States
-  if (loading && allInvoices.length === 0) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-50/50 flex flex-col items-center justify-center font-sans text-slate-900">
         <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
@@ -338,12 +338,13 @@ export default function AdminDashboard() {
     missingInvoicesCount
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    setLoading(true);
     const cycle = getCycleDates(cutoffDay);
     setStartDate(cycle.startStr);
     setEndDate(cycle.endStr);
     setFilterFloor('all');
-    fetchData();
+    await fetchData();
   };
 
   return (
@@ -515,10 +516,10 @@ export default function AdminDashboard() {
               </div>
 
               {/* Floor Tabs */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto self-start sm:self-auto">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden self-start sm:self-auto">
                 <button
                   onClick={() => setFilterFloor('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterFloor === 'all'
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${filterFloor === 'all'
                       ? 'bg-white text-blue-600 shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                     }`}
@@ -529,7 +530,7 @@ export default function AdminDashboard() {
                   <button
                     key={i}
                     onClick={() => setFilterFloor(String(f))}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterFloor === String(f)
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${filterFloor === String(f)
                         ? 'bg-white text-blue-600 shadow-2xs'
                         : 'text-slate-600 hover:text-slate-900'
                       }`}

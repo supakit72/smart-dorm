@@ -926,7 +926,7 @@ export default function RoomsManagementPage() {
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
+            <div className="p-6 pb-32 lg:pb-8 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
               
               {/* Room Images */}
               {selectedRoomDetails.image_urls && selectedRoomDetails.image_urls.length > 0 && (

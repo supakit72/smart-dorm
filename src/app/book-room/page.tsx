@@ -569,7 +569,7 @@ export default function BookRoomPage() {
                     </div>
                     <div>
                         {!isLoggedIn ? (
-                            <Link href="/login?redirect=/book-room" className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm flex items-center gap-2 border border-blue-100">
+                            <Link href="/login" className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm flex items-center gap-2 border border-blue-100">
                                 เข้าสู่ระบบ <span className="hidden sm:inline">(ผู้เช่า/ผู้ดูแล)</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
                             </Link>
