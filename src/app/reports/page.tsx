@@ -9,23 +9,48 @@ import * as XLSX from 'xlsx';
 // Utility functions
 const formatMonthTh = (monthYear: string) => {
   if (!monthYear || monthYear === 'Unknown') return 'ไม่ระบุเดือน';
-  const match = monthYear.match(/^(\d{4})-(\d{2})$/);
-  if (!match) return monthYear;
-  const year = parseInt(match[1]);
-  const month = parseInt(match[2]);
-  
   const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-  const thaiYear = year > 2500 ? year : year + 543;
-  
-  return `${thaiMonths[month - 1]} ${thaiYear}`;
+
+  // Format YYYY-MM
+  const matchIso = monthYear.match(/^(\d{4})-(\d{2})$/);
+  if (matchIso) {
+    const year = parseInt(matchIso[1]);
+    const month = parseInt(matchIso[2]);
+    const thaiYear = year > 2500 ? year : year + 543;
+    if (month >= 1 && month <= 12) {
+      return `${thaiMonths[month - 1]} ${thaiYear}`;
+    }
+  }
+
+  // Format D/M/YYYY or DD/MM/YYYY
+  const matchDmy = monthYear.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if (matchDmy) {
+    const month = parseInt(matchDmy[2]);
+    const year = parseInt(matchDmy[3]);
+    const thaiYear = year > 2500 ? year : year + 543;
+    if (month >= 1 && month <= 12) {
+      return `${thaiMonths[month - 1]} ${thaiYear}`;
+    }
+  }
+
+  return monthYear;
 };
 
 const normalizeMonth = (raw: string) => {
-  if (!raw) return 'Unknown';
+  if (!raw || raw === 'Unknown') return 'Unknown';
+  // Check ISO format YYYY-MM, YYYY/MM, or YYYY-MM-DD
   const matchIso = raw.match(/^(\d{4})[-\/](\d{1,2})/);
   if (matchIso) {
     let y = parseInt(matchIso[1]);
     let m = parseInt(matchIso[2]);
+    if (y > 2500) y -= 543;
+    return `${y}-${String(m).padStart(2, '0')}`;
+  }
+  // Check D/M/YYYY or DD/MM/YYYY
+  const matchDmy = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if (matchDmy) {
+    let m = parseInt(matchDmy[2]);
+    let y = parseInt(matchDmy[3]);
     if (y > 2500) y -= 543;
     return `${y}-${String(m).padStart(2, '0')}`;
   }
@@ -144,7 +169,12 @@ export default function ReportsPage() {
   // Filtered Data based on selected month
   const filteredInvoices = useMemo(() => {
     if (selectedMonth === 'all') return invoicesData;
-    return invoicesData.filter(inv => inv.month_year_normalized === selectedMonth);
+    const targetNorm = normalizeMonth(selectedMonth);
+    return invoicesData.filter(inv => 
+      inv.month_year_normalized === selectedMonth || 
+      inv.month_year_normalized === targetNorm ||
+      inv.month_year === selectedMonth
+    );
   }, [invoicesData, selectedMonth]);
 
   // Calculations for extras and base rent
@@ -266,79 +296,117 @@ export default function ReportsPage() {
 
   // Export Excel for Accounting
   const exportToExcel = () => {
-    if (filteredInvoices.length === 0) return;
+    if (filteredInvoices.length === 0) {
+      alert('ไม่พบข้อมูลสำหรับส่งออก Excel ในช่วงเวลาที่เลือก');
+      return;
+    }
 
-    let sumRent = 0;
-    let sumWaterUnit = 0;
-    let sumWaterCost = 0;
-    let sumElecUnit = 0;
-    let sumElecCost = 0;
-    let sumExtras = 0;
-    let sumTotal = 0;
+    try {
+      let sumRent = 0;
+      let sumWaterUnit = 0;
+      let sumWaterCost = 0;
+      let sumElecUnit = 0;
+      let sumElecCost = 0;
+      let sumExtras = 0;
+      let sumTotal = 0;
 
-    const excelData = filteredInvoices.map(inv => {
-      const { rent, wCost, eCost, extras, total } = getInvoiceBreakdown(inv);
-      const isPaid = inv?.status === 'paid' || inv?.status === 'ชำระแล้ว';
-      const statusTh = isPaid ? 'ชำระแล้ว' : 'ค้างชำระ';
-      const paymentDate = isPaid ? (inv?.updated_at ? new Date(inv.updated_at).toLocaleDateString('th-TH') : '-') : '-';
+      const excelData = filteredInvoices.map(inv => {
+        const { rent, wCost, eCost, extras, total } = getInvoiceBreakdown(inv);
+        const isPaid = inv?.status === 'paid' || inv?.status === 'ชำระแล้ว';
+        const statusTh = isPaid ? 'ชำระแล้ว' : 'ค้างชำระ';
+        const paymentDate = isPaid ? (inv?.updated_at ? new Date(inv.updated_at).toLocaleDateString('th-TH') : '-') : '-';
 
-      const wUnit = Number(inv?.water_unit || 0);
-      const eUnit = Number(inv?.electric_unit || 0);
+        const wUnit = Number(inv?.water_unit || 0);
+        const eUnit = Number(inv?.electric_unit || 0);
 
-      sumRent += rent;
-      sumWaterUnit += wUnit;
-      sumWaterCost += wCost;
-      sumElecUnit += eUnit;
-      sumElecCost += eCost;
-      sumExtras += extras;
-      sumTotal += total;
+        sumRent += rent;
+        sumWaterUnit += wUnit;
+        sumWaterCost += wCost;
+        sumElecUnit += eUnit;
+        sumElecCost += eCost;
+        sumExtras += extras;
+        sumTotal += total;
 
-      return {
-        'เลขที่บิล': inv?.invoices_id || '-',
-        'ประจำรอบเดือน': formatMonthTh(inv?.month_year_normalized),
-        'เลขห้อง': inv?.room_number || '-',
-        'ชื่อผู้เช่า': `${inv?.first_name || ''} ${inv?.last_name || ''}`.trim() || '-',
-        'ค่าเช่าห้อง': rent,
-        'หน่วยน้ำที่ใช้': wUnit,
-        'รวมเงินค่าน้ำ': wCost,
-        'หน่วยไฟที่ใช้': eUnit,
-        'รวมเงินค่าไฟ': eCost,
-        'บริการเสริม/อื่นๆ': extras,
-        'ยอดรวมสุทธิ': total,
-        'สถานะการชำระเงิน': statusTh,
-        'วันที่ชำระเงินจริง': paymentDate
-      };
-    });
+        const roomDisplay = inv?.room_number 
+          ? (String(inv.room_number).includes('ห้อง') ? String(inv.room_number) : `ห้อง ${inv.room_number}`)
+          : '-';
 
-    // Add Total Row
-    excelData.push({
-      'เลขที่บิล': 'รวมทั้งหมด (Total)',
-      'ประจำรอบเดือน': '',
-      'เลขห้อง': '',
-      'ชื่อผู้เช่า': '',
-      'ค่าเช่าห้อง': sumRent,
-      'หน่วยน้ำที่ใช้': sumWaterUnit,
-      'รวมเงินค่าน้ำ': sumWaterCost,
-      'หน่วยไฟที่ใช้': sumElecUnit,
-      'รวมเงินค่าไฟ': sumElecCost,
-      'บริการเสริม/อื่นๆ': sumExtras,
-      'ยอดรวมสุทธิ': sumTotal,
-      'สถานะการชำระเงิน': '',
-      'วันที่ชำระเงินจริง': ''
-    });
+        return {
+          'เลขที่บิล': inv?.invoices_id || '-',
+          'ประจำรอบเดือน': formatMonthTh(inv?.month_year_normalized || inv?.month_year),
+          'เลขห้อง': roomDisplay,
+          'ชื่อผู้เช่า': `${inv?.first_name || ''} ${inv?.last_name || ''}`.trim() || '-',
+          'ค่าเช่าห้อง': rent,
+          'หน่วยน้ำที่ใช้': wUnit,
+          'รวมเงินค่าน้ำ': wCost,
+          'หน่วยไฟที่ใช้': eUnit,
+          'รวมเงินค่าไฟ': eCost,
+          'บริการเสริม/อื่นๆ': extras,
+          'ยอดรวมสุทธิ': total,
+          'สถานะการชำระเงิน': statusTh,
+          'วันที่ชำระเงินจริง': paymentDate
+        };
+      });
 
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    const workbook = XLSX.utils.book_new();
-    const sheetName = selectedMonth === 'all' ? 'ทุกเดือน' : formatMonthTh(selectedMonth).substring(0,30);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      // Add Total Row
+      excelData.push({
+        'เลขที่บิล': 'รวมทั้งหมด (Total)',
+        'ประจำรอบเดือน': '',
+        'เลขห้อง': '',
+        'ชื่อผู้เช่า': '',
+        'ค่าเช่าห้อง': sumRent,
+        'หน่วยน้ำที่ใช้': sumWaterUnit,
+        'รวมเงินค่าน้ำ': sumWaterCost,
+        'หน่วยไฟที่ใช้': sumElecUnit,
+        'รวมเงินค่าไฟ': sumElecCost,
+        'บริการเสริม/อื่นๆ': sumExtras,
+        'ยอดรวมสุทธิ': sumTotal,
+        'สถานะการชำระเงิน': '',
+        'วันที่ชำระเงินจริง': ''
+      });
 
-    worksheet['!cols'] = [
-      { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 25 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 }
-    ];
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
 
-    XLSX.writeFile(workbook, `บัญชีหอพัก_${selectedMonth}.xlsx`);
+      // Excel Sheet Name: Cannot contain: \ / ? * [ ] : and max 31 chars
+      const rawSheetName = selectedMonth === 'all' ? 'ทุกเดือน' : formatMonthTh(selectedMonth);
+      let safeSheetName = rawSheetName.replace(/[\/\\?*\[\]:]/g, '-').trim();
+      if (!safeSheetName) safeSheetName = 'รายงาน';
+      safeSheetName = safeSheetName.substring(0, 31);
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName);
+
+      worksheet['!cols'] = [
+        { wch: 15 }, // เลขที่บิล
+        { wch: 18 }, // ประจำรอบเดือน
+        { wch: 12 }, // เลขห้อง
+        { wch: 25 }, // ชื่อผู้เช่า
+        { wch: 14 }, // ค่าเช่าห้อง
+        { wch: 14 }, // หน่วยน้ำที่ใช้
+        { wch: 14 }, // รวมเงินค่าน้ำ
+        { wch: 14 }, // หน่วยไฟที่ใช้
+        { wch: 14 }, // รวมเงินค่าไฟ
+        { wch: 16 }, // บริการเสริม/อื่นๆ
+        { wch: 16 }, // ยอดรวมสุทธิ
+        { wch: 16 }, // สถานะการชำระเงิน
+        { wch: 18 }  // วันที่ชำระเงินจริง
+      ];
+
+      // File Name:
+      // ถ้าโหลดทุกเดือน: SmartDorm_Report_All.xlsx
+      // ถ้าโหลดเฉพาะเดือน: SmartDorm_Report_2026-03.xlsx
+      let fileName = 'SmartDorm_Report_All.xlsx';
+      if (selectedMonth !== 'all') {
+        const norm = normalizeMonth(selectedMonth);
+        const cleanMonth = (norm && norm !== 'Unknown' ? norm : selectedMonth).replace(/[\/\\?*\[\]:]/g, '-');
+        fileName = `SmartDorm_Report_${cleanMonth}.xlsx`;
+      }
+
+      XLSX.writeFile(workbook, fileName);
+    } catch (err: any) {
+      console.error('Export Excel error:', err);
+      alert('เกิดข้อผิดพลาดในการส่งออก Excel: ' + (err?.message || err));
+    }
   };
 
   return (
