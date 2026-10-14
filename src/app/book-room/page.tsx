@@ -116,39 +116,39 @@ function RoomCard({ room, waterRate, electricRate, onOpenModal }: RoomCardProps)
             </div>
 
             {/* ส่วนรายละเอียด */}
-            <div className="p-6 flex-1 flex flex-col justify-between">
+            <div className="p-4 sm:p-6 flex-1 flex flex-col justify-between">
                 <div>
-                    <h3 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
+                    <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
                         ห้อง {room.room_number}
                     </h3>
 
                     {/* ป้ายแท็กแนวนอน */}
-                    <div className="flex flex-wrap items-center gap-2 mt-3">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2.5 sm:mt-3">
+                        <span className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
                             🏢 ชั้น {room.floor}
                         </span>
                         {isAir ? (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-cyan-50 text-cyan-700 text-xs font-bold border border-cyan-100">
+                            <span className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-xl bg-cyan-50 text-cyan-700 text-xs font-bold border border-cyan-100">
                                 ❄️ ห้องแอร์
                             </span>
                         ) : isFan ? (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
+                            <span className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
                                 💨 พัดลม
                             </span>
                         ) : typeName ? (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                            <span className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
                                 🛏️ {typeName}
                             </span>
                         ) : null}
                         {typeName && (isAir || isFan) && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-50 text-slate-500 text-[11px] font-medium border border-slate-100">
+                            <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-50 text-slate-500 text-[11px] font-medium border border-slate-100">
                                 {typeName}
                             </span>
                         )}
                     </div>
 
                     {/* ข้อมูลเรทน้ำไฟ */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-slate-500 mt-4 pt-3 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs font-medium text-slate-500 mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100">
                         <span className="flex items-center gap-1">
                             💧 ค่าน้ำ <strong className="text-slate-700">{waterRate}</strong> ฿/หน่วย
                         </span>
@@ -159,13 +159,13 @@ function RoomCard({ room, waterRate, electricRate, onOpenModal }: RoomCardProps)
                 </div>
 
                 {/* ส่วนราคาและ Action */}
-                <div className="mt-6 pt-4 border-t border-slate-100">
-                    <div className="flex items-baseline justify-between mb-4">
+                <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-slate-100">
+                    <div className="flex items-baseline justify-between mb-3 sm:mb-4">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                             ค่าเช่าเดือนละ
                         </span>
                         <div className="text-right">
-                            <span className="text-3xl font-black text-blue-600 tracking-tight">
+                            <span className="text-2xl sm:text-3xl font-black text-blue-600 tracking-tight">
                                 {Number(room.price_per_month).toLocaleString()}
                             </span>
                             <span className="text-slate-500 font-bold ml-1 text-sm">฿</span>
@@ -175,7 +175,7 @@ function RoomCard({ room, waterRate, electricRate, onOpenModal }: RoomCardProps)
                     <button
                         type="button"
                         onClick={() => onOpenModal(room)}
-                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-2xl transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] flex items-center justify-center gap-2 text-base group/btn"
+                        className="w-full py-3 sm:py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl sm:rounded-2xl transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] flex items-center justify-center gap-2 text-sm sm:text-base group/btn cursor-pointer"
                     >
                         <span>นัดหมายดูห้อง</span>
                         <span className="transition-transform group-hover/btn:translate-x-1">➔</span>
@@ -557,25 +557,28 @@ export default function BookRoomPage() {
         <div className="min-h-screen bg-slate-50 font-sans pb-20">
             {/* Navbar Public */}
             <header className="bg-white border-b border-slate-200/60 sticky top-0 z-20 shadow-sm">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
-                            <span className="text-white font-black text-xl leading-none tracking-tighter">SD</span>
+                <div className="max-w-6xl mx-auto px-4 py-2.5 sm:px-6 h-16 flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+                            <span className="text-white font-black text-lg sm:text-xl leading-none tracking-tighter">SD</span>
                         </div>
-                        <div>
-                            <h1 className="text-xl font-black text-slate-800 tracking-tight">{dormName}</h1>
-                            {phone && <p className="text-[10px] font-bold text-slate-500 uppercase">โทร. {phone}</p>}
+                        <div className="min-w-0">
+                            <h1 className="text-base sm:text-xl font-black text-slate-800 tracking-tight truncate">{dormName}</h1>
+                            {phone && <p className="text-[10px] font-bold text-slate-500 uppercase truncate">โทร. {phone}</p>}
                         </div>
                     </div>
-                    <div>
+                    <div className="shrink-0">
                         {!isLoggedIn ? (
-                            <Link href="/login" className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm flex items-center gap-2 border border-blue-100">
-                                เข้าสู่ระบบ <span className="hidden sm:inline">(ผู้เช่า/ผู้ดูแล)</span>
+                            <Link href="/login" className="px-3 sm:px-5 py-2 sm:py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border border-blue-100">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
+                                <span>เข้าสู่ระบบ</span>
+                                <span className="hidden sm:inline">(ผู้เช่า/ผู้ดูแล)</span>
                             </Link>
                         ) : (
-                            <Link href={userUid ? "/tenant" : "/admin"} className="px-5 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-sm border border-slate-200">
-                                ไปยังหน้า Dashboard ของคุณ
+                            <Link href={userUid ? "/tenant" : "/admin"} className="px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-xs sm:text-sm border border-slate-200 flex items-center gap-1.5 sm:gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                                <span className="sm:hidden">แดชบอร์ด</span>
+                                <span className="hidden sm:inline">ไปยังหน้า Dashboard ของคุณ</span>
                             </Link>
                         )}
                     </div>
@@ -583,20 +586,20 @@ export default function BookRoomPage() {
             </header>
 
             {/* Hero Section */}
-            <div className="bg-white border-b border-slate-200/60 pb-10 pt-12 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-blue-50 to-transparent rounded-full opacity-60 -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
+            <div className="bg-white border-b border-slate-200/60 py-4 sm:py-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-[280px] sm:w-[500px] h-[280px] sm:h-[500px] bg-gradient-to-bl from-blue-50 to-transparent rounded-full opacity-60 -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 text-center">
-                    <h2 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">ค้นหาและจองห้องพัก</h2>
-                    <p className="text-slate-500 max-w-xl mx-auto text-base">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight mb-1 sm:mb-2">ค้นหาและจองห้องพัก</h2>
+                    <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
                         เลือกดูห้องพักที่ว่างและทำการนัดหมายเพื่อเข้ามาดูห้องจริง สะดวก รวดเร็ว พร้อมเข้าอยู่ได้ทันที
                     </p>
                 </div>
             </div>
 
-            <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+            <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
                 {/* แถบตัวกรองห้องพัก (Filter Pills) */}
                 {!loading && rooms.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-10">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap px-4 py-1.5 sm:justify-center mb-6 sm:mb-10 -mx-4 sm:mx-0">
                         {filterOptions.map(option => {
                             const isActive = activeFilter === option.value;
                             const count = option.value === 'all'
@@ -616,14 +619,14 @@ export default function BookRoomPage() {
                                     key={option.value}
                                     type="button"
                                     onClick={() => setActiveFilter(option.value)}
-                                    className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 active:scale-95 ${
+                                    className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 cursor-pointer select-none ${
                                         isActive
-                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02] sm:scale-105'
                                             : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 shadow-sm hover:border-slate-300'
                                     }`}
                                 >
                                     <span>{option.label}</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                    <span className={`px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-semibold ${
                                         isActive ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-500'
                                     }`}>
                                         {count}
@@ -659,7 +662,7 @@ export default function BookRoomPage() {
                     </div>
                 ) : (
                     /* ดีไซน์การ์ดห้องพัก (Modern Room Cards) 2 คอลัมน์บนจอคอมพิวเตอร์ และ 1 คอลัมน์บนจอมือถือ */
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
                         {filteredRooms.map((room) => (
                             <RoomCard
                                 key={room.room_id}
