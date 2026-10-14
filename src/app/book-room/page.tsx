@@ -737,23 +737,59 @@ export default function BookRoomPage() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">ชื่อจริง <span className="text-rose-500">*</span></label>
-                                                <input type="text" required value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" placeholder="ชื่อ" />
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={firstName}
+                                                    onChange={e => setFirstName(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all"
+                                                    placeholder="ชื่อ"
+                                                />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">นามสกุล <span className="text-rose-500">*</span></label>
-                                                <input type="text" required value={lastName} onChange={e => setLastName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" placeholder="นามสกุล" />
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={lastName}
+                                                    onChange={e => setLastName(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all"
+                                                    placeholder="นามสกุล"
+                                                />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
-                                                <input type="tel" required value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" placeholder="08xxxxxxxx" />
+                                                <input
+                                                    type="tel"
+                                                    required
+                                                    value={phoneNumber}
+                                                    onChange={e => setPhoneNumber(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all"
+                                                    placeholder="08xxxxxxxx"
+                                                />
                                             </div>
                                             <div className="space-y-1.5 sm:col-span-2">
                                                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">อีเมล <span className="text-rose-500">*</span></label>
-                                                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" placeholder="email@example.com" />
+                                                <input
+                                                    type="email"
+                                                    required
+                                                    value={email}
+                                                    onChange={e => setEmail(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all"
+                                                    placeholder="email@example.com"
+                                                />
                                             </div>
                                             <div className="space-y-1.5 sm:col-span-2">
                                                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">ตั้งรหัสผ่าน <span className="text-rose-500">*</span></label>
-                                                <input type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" placeholder="รหัสผ่านอย่างน้อย 6 ตัวอักษร" />
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    minLength={6}
+                                                    value={password}
+                                                    onChange={e => setPassword(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all"
+                                                    placeholder="รหัสผ่านอย่างน้อย 6 ตัวอักษร"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -785,7 +821,7 @@ export default function BookRoomPage() {
                                         onChange={handleDateChange}
                                         min={minDateStr}
                                         max={maxDateStr}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-medium text-slate-700 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all cursor-pointer"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-800 placeholder:text-slate-400 focus:text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 outline-none transition-all cursor-pointer"
                                     />
                                     {unavailableDates.length > 0 && (
                                         <p className="text-xs text-rose-500 font-medium">*ไม่สามารถเลือกวันเหล่านี้ได้: {unavailableDates.join(', ')}</p>
