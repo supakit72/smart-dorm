@@ -104,9 +104,8 @@ function RoomCard({ room, waterRate, electricRate, onOpenModal }: RoomCardProps)
                                         e.stopPropagation();
                                         setCurrentIdx(i);
                                     }}
-                                    className={`h-1.5 rounded-full transition-all ${
-                                        i === currentIdx ? 'w-5 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'
-                                    }`}
+                                    className={`h-1.5 rounded-full transition-all ${i === currentIdx ? 'w-5 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'
+                                        }`}
                                     aria-label={`ไปยังรูปที่ ${i + 1}`}
                                 />
                             ))}
@@ -576,7 +575,7 @@ export default function BookRoomPage() {
                             </Link>
                         ) : (
                             <Link href={userUid ? "/tenant" : "/admin"} className="px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl transition-colors shadow-sm active:scale-95 text-xs sm:text-sm border border-slate-200 flex items-center gap-1.5 sm:gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
                                 <span className="sm:hidden">แดชบอร์ด</span>
                                 <span className="hidden sm:inline">ไปยังหน้า Dashboard ของคุณ</span>
                             </Link>
@@ -619,16 +618,14 @@ export default function BookRoomPage() {
                                     key={option.value}
                                     type="button"
                                     onClick={() => setActiveFilter(option.value)}
-                                    className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 cursor-pointer select-none ${
-                                        isActive
-                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02] sm:scale-105'
-                                            : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 shadow-sm hover:border-slate-300'
-                                    }`}
+                                    className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 cursor-pointer select-none ${isActive
+                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02] sm:scale-105'
+                                        : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 shadow-sm hover:border-slate-300'
+                                        }`}
                                 >
                                     <span>{option.label}</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-semibold ${
-                                        isActive ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-500'
-                                    }`}>
+                                    <span className={`px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-semibold ${isActive ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-500'
+                                        }`}>
                                         {count}
                                     </span>
                                 </button>
