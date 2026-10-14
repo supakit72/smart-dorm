@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
 import { useAlert } from '@/contexts/AlertContext';
 import ContractModal from '@/components/ContractModal';
 import Link from 'next/link';
+import { uploadRoomImageToStorage } from '@/backend/lib/uploadImage';
 
 export default function RoomsManagementPage() {
   const router = useRouter();
@@ -40,6 +41,8 @@ export default function RoomsManagementPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [newRoomTypeId, setNewRoomTypeId] = useState('');
   const [roomTypes, setRoomTypes] = useState<any[]>([]);
+  const [newImages, setNewImages] = useState<{ id: string; file: File; previewUrl: string }[]>([]);
+  const addFileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit Room Modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -50,10 +53,13 @@ export default function RoomsManagementPage() {
   const [editRoomTypeId, setEditRoomTypeId] = useState('');
   const [editRoomStatus, setEditRoomStatus] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [editExistingUrls, setEditExistingUrls] = useState<string[]>([]);
+  const [editNewImages, setEditNewImages] = useState<{ id: string; file: File; previewUrl: string }[]>([]);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // Contract Modal states
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
-  const [selectedRoomForContract, setSelectedRoomForContract] = useState<any>(null);
+  const [contractRoom, setContractRoom] = useState<any>(null);
 
   // Room Details Drawer states
   const [isRoomDetailsModalOpen, setIsRoomDetailsModalOpen] = useState(false);
@@ -135,6 +141,111 @@ export default function RoomsManagementPage() {
     }
   };
 
+  // Handle URL Query Params (e.g. ?room_id=...&action=contract)
+  useEffect(() => {
+    if (rooms.length > 0 && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roomIdParam = params.get('room_id') || params.get('roomId');
+      const actionParam = params.get('action');
+
+      if (roomIdParam) {
+        const foundRoom = rooms.find(
+          r => String(r.room_id) === String(roomIdParam) || String(r.room_number) === String(roomIdParam)
+        );
+        if (foundRoom) {
+          if (actionParam === 'contract') {
+            setIsRoomDetailsModalOpen(false);
+            setContractRoom(foundRoom);
+            setIsContractModalOpen(true);
+          } else {
+            openRoomDetailsModal(foundRoom);
+          }
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    }
+  }, [rooms]);
+
+  const openAddModal = () => {
+    setNewRoomNumber('');
+    setNewFloor('');
+    setNewPrice('');
+    setNewRoomTypeId('');
+    setNewImages([]);
+    if (addFileInputRef.current) addFileInputRef.current.value = '';
+    setIsAddModalOpen(true);
+  };
+
+  const handleNewImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const validFiles: File[] = [];
+    let hasOversized = false;
+
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        hasOversized = true;
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (hasOversized) {
+      showAlert('confirm', 'ไฟล์มีขนาดใหญ่เกินไป', 'ระบบเลือกเฉพาะไฟล์รูปภาพขนาดไม่เกิน 5MB ต่อรูป');
+    }
+
+    const items = validFiles.map(file => ({
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      file,
+      previewUrl: URL.createObjectURL(file)
+    }));
+
+    setNewImages(prev => [...prev, ...items]);
+    if (addFileInputRef.current) addFileInputRef.current.value = '';
+  };
+
+  const handleRemoveNewImage = (idToRemove: string) => {
+    setNewImages(prev => prev.filter(img => img.id !== idToRemove));
+  };
+
+  const handleEditNewImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const validFiles: File[] = [];
+    let hasOversized = false;
+
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        hasOversized = true;
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (hasOversized) {
+      showAlert('confirm', 'ไฟล์มีขนาดใหญ่เกินไป', 'ระบบเลือกเฉพาะไฟล์รูปภาพขนาดไม่เกิน 5MB ต่อรูป');
+    }
+
+    const items = validFiles.map(file => ({
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      file,
+      previewUrl: URL.createObjectURL(file)
+    }));
+
+    setEditNewImages(prev => [...prev, ...items]);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
+  };
+
+  const handleRemoveExistingEditImage = (indexToRemove: number) => {
+    setEditExistingUrls(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleRemoveNewEditImage = (idToRemove: string) => {
+    setEditNewImages(prev => prev.filter(img => img.id !== idToRemove));
+  };
+
   const handleAddRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoomNumber || !newFloor || !newPrice) {
@@ -144,6 +255,16 @@ export default function RoomsManagementPage() {
 
     try {
       setIsAdding(true);
+
+      let uploadedUrls: string[] = [];
+      if (newImages.length > 0) {
+        uploadedUrls = await Promise.all(
+          newImages.map((img, idx) =>
+            uploadRoomImageToStorage(img.file, `room-${newRoomNumber}-${idx + 1}`)
+          )
+        );
+      }
+
       const { error } = await supabase
         .from('rooms')
         .insert([
@@ -152,7 +273,8 @@ export default function RoomsManagementPage() {
             floor: newFloor,
             price_per_month: Number(newPrice),
             status: 'vacant',
-            room_type_id: newRoomTypeId ? Number(newRoomTypeId) : null
+            room_type_id: newRoomTypeId ? Number(newRoomTypeId) : null,
+            image_urls: uploadedUrls
           }
         ]);
 
@@ -162,13 +284,16 @@ export default function RoomsManagementPage() {
       setNewFloor('');
       setNewPrice('');
       setNewRoomTypeId('');
+      setNewImages([]);
+      if (addFileInputRef.current) addFileInputRef.current.value = '';
       setIsAddModalOpen(false);
 
+      showAlert('success', 'เพิ่มห้องพักสำเร็จ', `เพิ่มห้องพักหมายเลข ${newRoomNumber} เข้าสู่ระบบแล้ว`);
       fetchData();
 
     } catch (err: any) {
       console.error("Add Room Error:", err);
-      alert("เพิ่มห้องพักไม่สำเร็จ: " + err.message);
+      showAlert('confirm', 'เพิ่มห้องพักไม่สำเร็จ', err.message || 'เกิดข้อผิดพลาดในการเพิ่มห้องพัก');
     } finally {
       setIsAdding(false);
     }
@@ -181,6 +306,9 @@ export default function RoomsManagementPage() {
     setEditPrice(String(room.price_per_month || ''));
     setEditRoomTypeId(room.room_type_id ? String(room.room_type_id) : '');
     setEditRoomStatus(room.status || '');
+    setEditExistingUrls(Array.isArray(room.image_urls) ? [...room.image_urls] : []);
+    setEditNewImages([]);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
     setIsEditModalOpen(true);
   };
 
@@ -188,6 +316,18 @@ export default function RoomsManagementPage() {
     if (!editRoomId) return;
     try {
       setIsEditing(true);
+
+      let newlyUploadedUrls: string[] = [];
+      if (editNewImages.length > 0) {
+        newlyUploadedUrls = await Promise.all(
+          editNewImages.map((img, idx) =>
+            uploadRoomImageToStorage(img.file, `room-${editRoomNumber}-${idx + 1}`)
+          )
+        );
+      }
+
+      const finalImageUrls: string[] = [...editExistingUrls, ...newlyUploadedUrls];
+
       const { data: currentRoom, error: fetchError } = await supabase
         .from('rooms')
         .select('status')
@@ -200,7 +340,8 @@ export default function RoomsManagementPage() {
       const updatePayload: any = {
         room_number: editRoomNumber,
         floor: editFloor,
-        room_type_id: editRoomTypeId ? Number(editRoomTypeId) : null
+        room_type_id: editRoomTypeId ? Number(editRoomTypeId) : null,
+        image_urls: finalImageUrls
       };
 
       if (!isOccupied) {
@@ -215,10 +356,26 @@ export default function RoomsManagementPage() {
       if (error) throw error;
 
       setIsEditModalOpen(false);
+      setEditNewImages([]);
+      setEditExistingUrls([]);
+      if (editFileInputRef.current) editFileInputRef.current.value = '';
+
+      if (selectedRoomDetails && selectedRoomDetails.room_id === editRoomId) {
+        setSelectedRoomDetails((prev: any) => ({
+          ...prev,
+          room_number: editRoomNumber,
+          floor: editFloor,
+          price_per_month: !isOccupied ? Number(editPrice) : prev.price_per_month,
+          room_type_id: editRoomTypeId ? Number(editRoomTypeId) : null,
+          image_urls: finalImageUrls,
+          room_types: roomTypes.find(rt => String(rt.id) === String(editRoomTypeId)) || null
+        }));
+      }
+
       showAlert('success', 'แก้ไขข้อมูลห้องพักสำเร็จ', 'อัปเดตข้อมูลห้องพักเรียบร้อยแล้ว');
       fetchData();
     } catch (err: any) {
-      alert("แก้ไขห้องพักไม่สำเร็จ: " + err.message);
+      showAlert('confirm', 'แก้ไขห้องพักไม่สำเร็จ', err.message || 'เกิดข้อผิดพลาดในการแก้ไขห้องพัก');
     } finally {
       setIsEditing(false);
     }
@@ -254,7 +411,7 @@ export default function RoomsManagementPage() {
   };
 
   const openContractModal = (room: any) => {
-    setSelectedRoomForContract(room);
+    setContractRoom(room);
     setIsContractModalOpen(true);
   };
 
@@ -506,7 +663,7 @@ export default function RoomsManagementPage() {
             </div>
 
             <button
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={openAddModal}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 whitespace-nowrap"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -564,7 +721,14 @@ export default function RoomsManagementPage() {
                         className={`rounded-2xl p-4 border shadow-sm transition-all cursor-pointer hover:shadow-md hover:-translate-y-1 ${borderClass}`}
                       >
                         <div className="flex justify-between items-start mb-2">
-                          <h4 className={`text-2xl font-black tracking-tight ${isMaintenance ? 'text-slate-500' : 'text-slate-800'}`}>{room.room_number}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className={`text-2xl font-black tracking-tight ${isMaintenance ? 'text-slate-500' : 'text-slate-800'}`}>{room.room_number}</h4>
+                            {room.image_urls?.[0] && (
+                              <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5" title={`${room.image_urls.length} รูป`}>
+                                📷 {room.image_urls.length}
+                              </span>
+                            )}
+                          </div>
                           <span className={`w-3.5 h-3.5 rounded-full ring-4 shadow-sm ${statusColor} ${isMaintenance ? 'ring-slate-100' : isVacant ? 'ring-emerald-50' : 'ring-rose-50'} mt-1`}></span>
                         </div>
                         <div className="space-y-1 mt-3">
@@ -605,8 +769,23 @@ export default function RoomsManagementPage() {
                     return (
                       <tr key={room.room_id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="font-bold text-slate-800 text-base">{room.room_number}</div>
-                          {room.room_types?.name && <div className="text-xs text-slate-400">{room.room_types.name}</div>}
+                          <div className="flex items-center gap-3">
+                            {room.image_urls?.[0] ? (
+                              <img
+                                src={room.image_urls[0]}
+                                alt={`ห้อง ${room.room_number}`}
+                                className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-400 text-lg shrink-0">
+                                🚪
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-bold text-slate-800 text-base">{room.room_number}</div>
+                              {room.room_types?.name && <div className="text-xs text-slate-400">{room.room_types.name}</div>}
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4 font-medium text-slate-700">{room.floor || '-'}</td>
                         <td className="px-6 py-4 font-medium text-slate-700">{Number(room.price_per_month).toLocaleString()} ฿</td>
@@ -658,10 +837,26 @@ export default function RoomsManagementPage() {
                     <div key={room.room_id} className="p-4 hover:bg-slate-50 transition-colors">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-3">
-                          <h4 className="text-xl font-bold text-slate-800">{room.room_number}</h4>
-                          {isVacant && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ว่าง</span>}
-                          {isOccupied && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">มีผู้เช่า</span>}
-                          {isMaintenance && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">ปิดปรับปรุง</span>}
+                          {room.image_urls?.[0] ? (
+                            <img
+                              src={room.image_urls[0]}
+                              alt={`ห้อง ${room.room_number}`}
+                              className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-400 text-sm shrink-0">
+                              🚪
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xl font-bold text-slate-800">{room.room_number}</h4>
+                              {isVacant && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ว่าง</span>}
+                              {isOccupied && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">มีผู้เช่า</span>}
+                              {isMaintenance && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">ปิดปรับปรุง</span>}
+                            </div>
+                            {room.room_types?.name && <p className="text-xs text-slate-400">{room.room_types.name}</p>}
+                          </div>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-slate-700">{Number(room.price_per_month).toLocaleString()} ฿</p>
@@ -695,28 +890,84 @@ export default function RoomsManagementPage() {
 
       {/* Slide-over Drawer (Room Details) */}
       {isRoomDetailsModalOpen && selectedRoomDetails && (
-        <div className="fixed inset-0 z-[100] flex items-end lg:items-stretch lg:justify-end">
+        <div className="fixed inset-0 z-40 flex items-end lg:items-stretch lg:justify-end">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsRoomDetailsModalOpen(false)}></div>
           
           <div className="relative w-full lg:w-[450px] bg-white rounded-t-3xl lg:rounded-none lg:rounded-l-3xl shadow-2xl flex flex-col max-h-[90vh] lg:max-h-full transform transition-transform animate-in slide-in-from-bottom-full lg:slide-in-from-right-full duration-300">
             
-            <div className="flex justify-between items-center px-6 py-5 border-b border-slate-100 bg-white rounded-t-3xl lg:rounded-tl-3xl shrink-0">
-              <div>
-                <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                  <span className="text-2xl">🚪</span> ห้อง {selectedRoomDetails.room_number}
+            <div className="flex justify-between items-center px-6 py-5 border-b border-slate-100 bg-white rounded-t-3xl lg:rounded-tl-3xl shrink-0 gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2 truncate">
+                  <span className="text-2xl shrink-0">🚪</span> 
+                  <span className="truncate">ห้อง {selectedRoomDetails.room_number}</span>
                 </h3>
-                <p className="text-sm text-slate-500 mt-1 font-medium">ชั้น {selectedRoomDetails.floor || '-'} • ราคา {Number(selectedRoomDetails.price_per_month).toLocaleString()} บาท/เดือน</p>
+                <p className="text-sm text-slate-500 mt-1 font-medium truncate">
+                  ชั้น {selectedRoomDetails.floor || '-'} • ราคา {Number(selectedRoomDetails.price_per_month).toLocaleString()} บาท/เดือน
+                </p>
               </div>
-              <button
-                onClick={() => setIsRoomDetailsModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => openEditModal(selectedRoomDetails)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-700 font-bold text-xs transition-colors border border-amber-200/80 shadow-sm"
+                  title="แก้ไขข้อมูลห้องพัก"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                  <span>แก้ไขข้อมูลห้อง</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRoomDetailsModalOpen(false)}
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
+                  title="ปิด"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
               
+              {/* Room Images */}
+              {selectedRoomDetails.image_urls && selectedRoomDetails.image_urls.length > 0 && (
+                <div className="space-y-2">
+                  <div className="rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm bg-slate-900 h-52 group relative">
+                    <img
+                      src={selectedRoomDetails.image_urls[0]}
+                      alt={`ห้อง ${selectedRoomDetails.room_number}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex justify-between items-end p-4">
+                      <span className="text-white text-xs font-semibold">รูปหน้าปก (Cover)</span>
+                      <span className="bg-black/60 backdrop-blur-md text-white text-[11px] font-bold px-2 py-0.5 rounded-md">
+                        {selectedRoomDetails.image_urls.length} รูป
+                      </span>
+                    </div>
+                  </div>
+                  {selectedRoomDetails.image_urls.length > 1 && (
+                    <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5">
+                      {selectedRoomDetails.image_urls.map((url: string, idx: number) => (
+                        <a
+                          key={idx}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shrink-0 hover:opacity-90 transition-opacity"
+                          title={`ดูรูปที่ ${idx + 1}`}
+                        >
+                          <img src={url} alt={`รูปห้อง ${idx + 1}`} className="w-full h-full object-cover" />
+                          {idx === 0 && (
+                            <span className="absolute bottom-0 inset-x-0 bg-blue-600/90 text-[8px] text-white text-center font-bold py-0.5">
+                              Cover
+                            </span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Status Section */}
               <div className="bg-white rounded-2xl border border-slate-200/70 p-5 shadow-sm">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">สถานะปัจจุบัน</h4>
@@ -731,12 +982,13 @@ export default function RoomsManagementPage() {
                     <button
                       onClick={() => {
                         setIsRoomDetailsModalOpen(false);
-                        openContractModal(selectedRoomDetails);
+                        setContractRoom(selectedRoomDetails);
+                        setIsContractModalOpen(true);
                       }}
                       className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-                      ทำสัญญาเช่าใหม่
+                      + ทำสัญญาเช่าใหม่
                     </button>
                     
                     <button
@@ -884,9 +1136,9 @@ export default function RoomsManagementPage() {
 
       {/* Add Room Modal, Maintenance Modal, Edit Room Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsAddModalOpen(false)}></div>
-          <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden scale-100 transition-transform">
+          <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden scale-100 transition-transform my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -964,6 +1216,77 @@ export default function RoomsManagementPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* รูปภาพห้องพัก (Multi-Image) */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-sm font-bold text-slate-700">รูปภาพห้องพัก</label>
+                    {newImages.length > 0 && (
+                      <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">
+                        เลือกแล้ว {newImages.length} รูป
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    ref={addFileInputRef}
+                    multiple
+                    accept="image/*"
+                    onChange={handleNewImagesChange}
+                    className="hidden"
+                  />
+
+                  {newImages.length > 0 ? (
+                    <div>
+                      <div className="grid grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1.5 bg-slate-50/80 rounded-2xl border border-slate-200">
+                        {newImages.map((img, idx) => (
+                          <div key={img.id} className="relative rounded-xl overflow-hidden border border-slate-200/80 bg-slate-900 group aspect-square shadow-sm">
+                            <img
+                              src={img.previewUrl}
+                              alt={`Preview ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            {idx === 0 && (
+                              <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded shadow-sm">
+                                รูปหน้าปก (Cover)
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveNewImage(img.id)}
+                              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/75 hover:bg-rose-600 text-white flex items-center justify-center transition-colors text-xs font-bold shadow-md"
+                              title="ลบรูปนี้"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addFileInputRef.current?.click()}
+                          className="aspect-square border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50/40 transition-all text-xs font-bold gap-1"
+                        >
+                          <span className="text-xl leading-none text-slate-400 group-hover:text-blue-500">+</span>
+                          <span>เพิ่มรูป</span>
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
+                        <span>💡</span> รูปแรกจะถูกใช้เป็นรูปหน้าปก สามารถคลิก [✕] เพื่อนำรูปที่ไม่ต้องการออกได้
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => addFileInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-slate-300 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/20 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:scale-110 shadow-sm transition-all mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      </div>
+                      <p className="text-sm font-bold text-slate-700 group-hover:text-blue-600 transition-colors">คลิกเพื่อเลือกรูปภาพห้องพัก</p>
+                      <p className="text-xs text-slate-400 mt-0.5">เลือกได้หลายรูปพร้อมกัน (รูปแรกจะเป็นรูปหน้าปก)</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-8 flex gap-3">
@@ -977,10 +1300,13 @@ export default function RoomsManagementPage() {
                 <button
                   type="submit"
                   disabled={isAdding || isNewRoomDuplicate}
-                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-md disabled:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex justify-center items-center"
+                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors shadow-md disabled:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex justify-center items-center gap-2"
                 >
                   {isAdding ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>กำลังบันทึก...</span>
+                    </>
                   ) : (
                     'บันทึกข้อมูล'
                   )}
@@ -992,7 +1318,7 @@ export default function RoomsManagementPage() {
       )}
 
       {isMaintenanceModalOpen && selectedRoomForMaintenance && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => !isSubmittingMaintenance && setIsMaintenanceModalOpen(false)}></div>
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden scale-100 transition-transform">
 
@@ -1051,9 +1377,9 @@ export default function RoomsManagementPage() {
       )}
 
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
-          <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden scale-100 transition-transform">
+          <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden scale-100 transition-transform my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -1132,6 +1458,119 @@ export default function RoomsManagementPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* รูปภาพห้องพัก (Multi-Image) */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-sm font-bold text-slate-700">รูปภาพห้องพัก</label>
+                    {(editExistingUrls.length + editNewImages.length) > 0 && (
+                      <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full">
+                        ทั้งหมด {editExistingUrls.length + editNewImages.length} รูป
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    ref={editFileInputRef}
+                    multiple
+                    accept="image/*"
+                    onChange={handleEditNewImagesChange}
+                    className="hidden"
+                  />
+
+                  {(editExistingUrls.length + editNewImages.length) > 0 ? (
+                    <div>
+                      <div className="grid grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1.5 bg-slate-50/80 rounded-2xl border border-slate-200">
+                        {/* รูปภาพเดิมที่มีในฐานข้อมูล */}
+                        {editExistingUrls.map((url, idx) => {
+                          const isCover = idx === 0;
+                          return (
+                            <div key={`existing-${idx}`} className="relative rounded-xl overflow-hidden border border-slate-200/80 bg-slate-900 group aspect-square shadow-sm">
+                              <img
+                                src={url}
+                                alt={`Existing ${idx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              {isCover ? (
+                                <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-sm">
+                                  รูปหน้าปก (Cover)
+                                </span>
+                              ) : (
+                                <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-slate-900/70 text-white text-[9px] font-medium rounded shadow-sm">
+                                  รูปเดิม
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveExistingEditImage(idx)}
+                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/75 hover:bg-rose-600 text-white flex items-center justify-center transition-colors text-xs font-bold shadow-md"
+                                title="ลบรูปนี้"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {/* รูปภาพใหม่ที่เพิ่งเลือกจากเครื่อง */}
+                        {editNewImages.map((img, nIdx) => {
+                          const overallIndex = editExistingUrls.length + nIdx;
+                          const isCover = overallIndex === 0;
+                          return (
+                            <div key={img.id} className="relative rounded-xl overflow-hidden border border-emerald-300 bg-slate-900 group aspect-square shadow-sm ring-1 ring-emerald-400">
+                              <img
+                                src={img.previewUrl}
+                                alt={`New ${nIdx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              {isCover ? (
+                                <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-bold rounded shadow-sm">
+                                  รูปหน้าปก (Cover)
+                                </span>
+                              ) : (
+                                <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] font-bold rounded shadow-sm">
+                                  ใหม่
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveNewEditImage(img.id)}
+                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/75 hover:bg-rose-600 text-white flex items-center justify-center transition-colors text-xs font-bold shadow-md"
+                                title="ลบรูปนี้"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {/* ปุ่มเพิ่มรูปภาพเพิ่ม */}
+                        <button
+                          type="button"
+                          onClick={() => editFileInputRef.current?.click()}
+                          className="aspect-square border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:text-amber-600 bg-white hover:bg-amber-50/40 transition-all text-xs font-bold gap-1"
+                        >
+                          <span className="text-xl leading-none text-slate-400 group-hover:text-amber-500">+</span>
+                          <span>เพิ่มรูป</span>
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
+                        <span>💡</span> รูปแรกจะถูกใช้เป็นรูปหน้าปก สามารถคลิก [✕] เพื่อนำรูปที่ไม่ต้องการออกได้
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-slate-300 hover:border-amber-400 bg-slate-50/50 hover:bg-amber-50/20 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-amber-500 group-hover:scale-110 shadow-sm transition-all mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      </div>
+                      <p className="text-sm font-bold text-slate-700 group-hover:text-amber-600 transition-colors">คลิกเพื่อเลือกรูปภาพห้องพัก</p>
+                      <p className="text-xs text-slate-400 mt-0.5">เลือกได้หลายรูปพร้อมกัน (รูปแรกจะเป็นรูปหน้าปก)</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-8 flex gap-3">
@@ -1145,10 +1584,13 @@ export default function RoomsManagementPage() {
                 <button
                   type="submit"
                   disabled={isEditing || isEditRoomDuplicate}
-                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors shadow-md disabled:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex justify-center items-center"
+                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors shadow-md disabled:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex justify-center items-center gap-2"
                 >
                   {isEditing ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>กำลังบันทึก...</span>
+                    </>
                   ) : (
                     'บันทึกการแก้ไข'
                   )}
@@ -1158,6 +1600,22 @@ export default function RoomsManagementPage() {
           </div>
         </div>
       )}
+
+      {/* Contract Modal */}
+      <ContractModal
+        isOpen={isContractModalOpen}
+        onClose={() => {
+          setIsContractModalOpen(false);
+          setContractRoom(null);
+        }}
+        onSuccess={() => {
+          setIsContractModalOpen(false);
+          setContractRoom(null);
+          setIsRoomDetailsModalOpen(false);
+          fetchData();
+        }}
+        room={contractRoom}
+      />
 
     </AdminLayout>
   );

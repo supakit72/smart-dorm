@@ -163,6 +163,7 @@ export default function AdminDashboard() {
 
         return {
           id: room.room_id,
+          room_id: room.room_id,
           number: room.room_number,
           floor: room.floor,
           price_per_month: room.price_per_month,
@@ -768,12 +769,13 @@ export default function AdminDashboard() {
               ) : (
                 <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 text-center">
                   <p className="text-slate-500 font-medium text-xs sm:text-sm mb-3">ยังไม่มีผู้เช่าลงทะเบียนในระบบ (ห้องว่าง)</p>
-                  <Link
-                    href="/contracts"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/rooms?room_id=${selectedRoom.room_id || selectedRoom.id}&action=contract`)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
                     + ทำสัญญาเช่าใหม่
-                  </Link>
+                  </button>
                 </div>
               )}
 

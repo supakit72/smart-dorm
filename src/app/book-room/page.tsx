@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/backend/lib/supabase';
@@ -9,12 +8,191 @@ import { useAlert } from '@/contexts/AlertContext';
 import generatePayload from 'promptpay-qr';
 import { QRCodeSVG } from 'qrcode.react';
 
+const DEFAULT_ROOM_IMAGE = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80';
+
+type FilterType = 'all' | 'air' | 'fan' | 'floor_1_2' | 'floor_3_4';
+
+interface RoomCardProps {
+    room: any;
+    waterRate: number;
+    electricRate: number;
+    onOpenModal: (room: any) => void;
+}
+
+function RoomCard({ room, waterRate, electricRate, onOpenModal }: RoomCardProps) {
+    const [currentIdx, setCurrentIdx] = useState(0);
+
+    // Hybrid Images Fallback:
+    // 1. room.image_urls
+    // 2. room.room_types?.image_urls
+    // 3. DEFAULT_ROOM_IMAGE
+    const images: string[] = useMemo(() => {
+        if (Array.isArray(room.image_urls) && room.image_urls.length > 0) {
+            return room.image_urls;
+        }
+        if (Array.isArray(room.room_types?.image_urls) && room.room_types.image_urls.length > 0) {
+            return room.room_types.image_urls;
+        }
+        return [DEFAULT_ROOM_IMAGE];
+    }, [room]);
+
+    const hasMultipleImages = images.length > 1;
+
+    const handlePrev = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentIdx(prev => (prev === 0 ? images.length - 1 : prev - 1));
+    };
+
+    const handleNext = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentIdx(prev => (prev === images.length - 1 ? 0 : prev + 1));
+    };
+
+    const typeName = room.room_types?.name || '';
+    const isAir = typeName.includes('แอร์') || typeName.toLowerCase().includes('air');
+    const isFan = typeName.includes('พัดลม') || typeName.toLowerCase().includes('fan');
+
+    return (
+        <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-slate-200/60 transition-all duration-300 flex flex-col group">
+            {/* ส่วนหัวภาพ (Carousel & Floating Badges) */}
+            <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-900 select-none">
+                <img
+                    src={images[currentIdx]}
+                    alt={`ห้อง ${room.room_number}`}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+
+                {/* แปะ Badge สถานะ ว่าง สีเขียวลอยมุมขวาบน */}
+                <div className="absolute top-3.5 right-3.5 z-10 px-3 py-1 rounded-full bg-emerald-500/95 backdrop-blur-md text-white font-bold text-xs shadow-md flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                    <span>ว่าง</span>
+                </div>
+
+                {/* ไอคอนกล้อง/รูปภาพลอยมุมขวาล่าง */}
+                <div className="absolute bottom-3.5 right-3.5 z-10 px-2.5 py-1 rounded-full bg-slate-900/75 backdrop-blur-md text-white text-[11px] font-bold flex items-center gap-1 shadow-sm">
+                    <span>📷</span>
+                    <span>{images.length}</span>
+                </div>
+
+                {/* Carousel Controls (Previous / Next) */}
+                {hasMultipleImages && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={handlePrev}
+                            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center transition-all z-10 backdrop-blur-sm opacity-90 sm:opacity-0 group-hover:opacity-100 shadow-sm active:scale-90"
+                            title="รูปก่อนหน้า"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleNext}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center transition-all z-10 backdrop-blur-sm opacity-90 sm:opacity-0 group-hover:opacity-100 shadow-sm active:scale-90"
+                            title="รูปถัดไป"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+
+                        {/* Carousel Dots กึ่งกลางล่างของรูปภาพ */}
+                        <div className="absolute bottom-3.5 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md">
+                            {images.map((_, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setCurrentIdx(i);
+                                    }}
+                                    className={`h-1.5 rounded-full transition-all ${
+                                        i === currentIdx ? 'w-5 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'
+                                    }`}
+                                    aria-label={`ไปยังรูปที่ ${i + 1}`}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* ส่วนรายละเอียด */}
+            <div className="p-6 flex-1 flex flex-col justify-between">
+                <div>
+                    <h3 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
+                        ห้อง {room.room_number}
+                    </h3>
+
+                    {/* ป้ายแท็กแนวนอน */}
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
+                            🏢 ชั้น {room.floor}
+                        </span>
+                        {isAir ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-cyan-50 text-cyan-700 text-xs font-bold border border-cyan-100">
+                                ❄️ ห้องแอร์
+                            </span>
+                        ) : isFan ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
+                                💨 พัดลม
+                            </span>
+                        ) : typeName ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                                🛏️ {typeName}
+                            </span>
+                        ) : null}
+                        {typeName && (isAir || isFan) && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-50 text-slate-500 text-[11px] font-medium border border-slate-100">
+                                {typeName}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* ข้อมูลเรทน้ำไฟ */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-slate-500 mt-4 pt-3 border-t border-slate-100">
+                        <span className="flex items-center gap-1">
+                            💧 ค่าน้ำ <strong className="text-slate-700">{waterRate}</strong> ฿/หน่วย
+                        </span>
+                        <span className="flex items-center gap-1">
+                            ⚡ ไฟ <strong className="text-slate-700">{electricRate}</strong> ฿/หน่วย
+                        </span>
+                    </div>
+                </div>
+
+                {/* ส่วนราคาและ Action */}
+                <div className="mt-6 pt-4 border-t border-slate-100">
+                    <div className="flex items-baseline justify-between mb-4">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            ค่าเช่าเดือนละ
+                        </span>
+                        <div className="text-right">
+                            <span className="text-3xl font-black text-blue-600 tracking-tight">
+                                {Number(room.price_per_month).toLocaleString()}
+                            </span>
+                            <span className="text-slate-500 font-bold ml-1 text-sm">฿</span>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => onOpenModal(room)}
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-2xl transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] flex items-center justify-center gap-2 text-base group/btn"
+                    >
+                        <span>นัดหมายดูห้อง</span>
+                        <span className="transition-transform group-hover/btn:translate-x-1">➔</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function BookRoomPage() {
     const router = useRouter();
     const { showAlert, showConfirm } = useAlert();
 
     const [rooms, setRooms] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
     // User State
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -108,7 +286,6 @@ export default function BookRoomPage() {
                 const roomToOpen = rooms.find(r => r.room_id.toString() === roomId);
                 if (roomToOpen) {
                     handleOpenModal(roomToOpen);
-                    // Clear the parameter so it doesn't reopen on refresh
                     window.history.replaceState(null, '', '/book-room');
                 }
             }
@@ -128,6 +305,7 @@ export default function BookRoomPage() {
 
             const bookedRoomIds = bookingsData?.map(b => b.room_id) || [];
 
+            // Query vacant rooms joining room_types:room_type_id(*)
             const { data, error } = await supabase
                 .from('rooms')
                 .select(`
@@ -136,7 +314,8 @@ export default function BookRoomPage() {
                     floor,
                     price_per_month,
                     status,
-                    room_types (name, base_price)
+                    image_urls,
+                    room_types:room_type_id (*)
                 `)
                 .eq('status', 'vacant')
                 .order('room_number', { ascending: true });
@@ -153,6 +332,37 @@ export default function BookRoomPage() {
             setLoading(false);
         }
     };
+
+    // Filter pills options
+    const filterOptions: { label: string; value: FilterType }[] = [
+        { label: 'ทั้งหมด', value: 'all' },
+        { label: 'ห้องแอร์', value: 'air' },
+        { label: 'พัดลม', value: 'fan' },
+        { label: 'ชั้น 1-2', value: 'floor_1_2' },
+        { label: 'ชั้น 3-4', value: 'floor_3_4' },
+    ];
+
+    // Filtered rooms computed in real-time
+    const filteredRooms = useMemo(() => {
+        return rooms.filter(room => {
+            const typeName = room.room_types?.name || '';
+            const floorNum = Number(room.floor);
+
+            switch (activeFilter) {
+                case 'air':
+                    return typeName.includes('แอร์') || typeName.toLowerCase().includes('air');
+                case 'fan':
+                    return typeName.includes('พัดลม') || typeName.toLowerCase().includes('fan');
+                case 'floor_1_2':
+                    return floorNum === 1 || floorNum === 2;
+                case 'floor_3_4':
+                    return floorNum === 3 || floorNum === 4;
+                case 'all':
+                default:
+                    return true;
+            }
+        });
+    }, [rooms, activeFilter]);
 
     const handleOpenModal = (room: any) => {
         setSelectedRoom(room);
@@ -309,7 +519,6 @@ export default function BookRoomPage() {
                     showAlert('success', 'สำเร็จ!', 'ระบบได้รับข้อมูลการจองของคุณแล้ว กำลังพาท่านไปยังหน้าติดตามสถานะ');
                     setIsModalOpen(false);
 
-                    // Redirect to tenant page
                     router.push('/tenant');
 
                 } catch (err: any) {
@@ -332,11 +541,23 @@ export default function BookRoomPage() {
     maxDate.setDate(today.getDate() + maxBookingDays);
     const maxDateStr = maxDate.toISOString().split('T')[0];
 
+    // Selected room image for modal
+    const selectedRoomImage = useMemo(() => {
+        if (!selectedRoom) return DEFAULT_ROOM_IMAGE;
+        if (Array.isArray(selectedRoom.image_urls) && selectedRoom.image_urls.length > 0) {
+            return selectedRoom.image_urls[0];
+        }
+        if (Array.isArray(selectedRoom.room_types?.image_urls) && selectedRoom.room_types.image_urls.length > 0) {
+            return selectedRoom.room_types.image_urls[0];
+        }
+        return DEFAULT_ROOM_IMAGE;
+    }, [selectedRoom]);
+
     return (
         <div className="min-h-screen bg-slate-50 font-sans pb-20">
             {/* Navbar Public */}
             <header className="bg-white border-b border-slate-200/60 sticky top-0 z-20 shadow-sm">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex justify-between items-center">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
                             <span className="text-white font-black text-xl leading-none tracking-tighter">SD</span>
@@ -364,70 +585,89 @@ export default function BookRoomPage() {
             {/* Hero Section */}
             <div className="bg-white border-b border-slate-200/60 pb-10 pt-12 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-blue-50 to-transparent rounded-full opacity-60 -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 relative z-10 text-center">
-                    <h2 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-4">ค้นหาและจองห้องพัก</h2>
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 text-center">
+                    <h2 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-3">ค้นหาและจองห้องพัก</h2>
                     <p className="text-slate-500 max-w-xl mx-auto text-base">
                         เลือกดูห้องพักที่ว่างและทำการนัดหมายเพื่อเข้ามาดูห้องจริง สะดวก รวดเร็ว พร้อมเข้าอยู่ได้ทันที
                     </p>
                 </div>
             </div>
 
-            <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+            <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+                {/* แถบตัวกรองห้องพัก (Filter Pills) */}
+                {!loading && rooms.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-10">
+                        {filterOptions.map(option => {
+                            const isActive = activeFilter === option.value;
+                            const count = option.value === 'all'
+                                ? rooms.length
+                                : rooms.filter(r => {
+                                    const tName = r.room_types?.name || '';
+                                    const fNum = Number(r.floor);
+                                    if (option.value === 'air') return tName.includes('แอร์') || tName.toLowerCase().includes('air');
+                                    if (option.value === 'fan') return tName.includes('พัดลม') || tName.toLowerCase().includes('fan');
+                                    if (option.value === 'floor_1_2') return fNum === 1 || fNum === 2;
+                                    if (option.value === 'floor_3_4') return fNum === 3 || fNum === 4;
+                                    return true;
+                                }).length;
+
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setActiveFilter(option.value)}
+                                    className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 active:scale-95 ${
+                                        isActive
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
+                                            : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 shadow-sm hover:border-slate-300'
+                                    }`}
+                                >
+                                    <span>{option.label}</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                        isActive ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="flex flex-col justify-center items-center py-20">
                         <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
                         <p className="mt-4 text-slate-500 font-medium">กำลังค้นหาห้องว่าง...</p>
                     </div>
                 ) : rooms.length === 0 ? (
-                    <div className="bg-white p-12 rounded-[2rem] text-center border border-slate-200/60 shadow-sm max-w-2xl mx-auto">
+                    <div className="bg-white p-12 rounded-[2rem] text-center border border-slate-200/60 shadow-sm max-w-2xl mx-auto my-10">
                         <div className="text-5xl mb-4">🏢</div>
                         <h3 className="text-xl font-bold text-slate-800 mb-2">ขออภัย ไม่มีห้องว่างในขณะนี้</h3>
                         <p className="text-slate-500">กรุณากลับมาตรวจสอบใหม่ในภายหลัง หรือติดต่อผู้ดูแลระบบ</p>
                     </div>
+                ) : filteredRooms.length === 0 ? (
+                    <div className="bg-white p-12 rounded-[2rem] text-center border border-slate-200/60 shadow-sm max-w-xl mx-auto my-8">
+                        <div className="text-5xl mb-4">🔍</div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">ไม่พบห้องพักที่ตรงกับตัวกรองนี้</h3>
+                        <p className="text-slate-500 text-sm mb-5">ลองเปลี่ยนตัวกรอง หรือเลือกดูห้องพักทั้งหมด</p>
+                        <button
+                            onClick={() => setActiveFilter('all')}
+                            className="px-5 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold rounded-xl text-sm transition-colors"
+                        >
+                            ดูห้องพักทั้งหมด ({rooms.length} ห้อง)
+                        </button>
+                    </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {rooms.map((room) => (
-                            <div key={room.room_id} className="bg-white rounded-3xl border border-slate-200 overflow-hidden hover:shadow-xl hover:shadow-slate-200/40 transition-all hover:-translate-y-1 group">
-                                <div className="p-6">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <h3 className="text-3xl font-black text-slate-800 tracking-tighter">ห้อง {room.room_number}</h3>
-                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-bold text-[10px] uppercase tracking-widest border border-emerald-100">
-                                            ว่าง
-                                        </span>
-                                    </div>
-
-                                    <div className="space-y-2 mb-6 text-sm">
-                                        <div className="flex items-center text-slate-600">
-                                            <span className="w-6 text-center mr-2">🏢</span>
-                                            <span className="font-medium">ชั้น {room.floor}</span>
-                                        </div>
-                                        <div className="flex items-center text-slate-600">
-                                            <span className="w-6 text-center mr-2">🛏️</span>
-                                            <span className="font-medium">{room.room_types?.name || 'ประเภทห้องปกติ'}</span>
-                                        </div>
-                                        <div className="flex items-center text-slate-600">
-                                            <span className="w-6 text-center mr-2">💧</span>
-                                            <span className="font-medium">ค่าน้ำ {waterRate} ฿/หน่วย, ไฟ {electricRate} ฿/หน่วย</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-5 border-t border-slate-100 border-dashed flex justify-between items-end mb-5">
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">ค่าเช่าเดือนละ</span>
-                                        <div className="text-right">
-                                            <span className="text-2xl font-black text-blue-600">{room.price_per_month.toLocaleString()}</span>
-                                            <span className="text-slate-500 font-bold ml-1">฿</span>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={() => handleOpenModal(room)}
-                                        className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-2 group-hover:bg-blue-600"
-                                    >
-                                        นัดหมายดูห้อง
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                                    </button>
-                                </div>
-                            </div>
+                    /* ดีไซน์การ์ดห้องพัก (Modern Room Cards) 2 คอลัมน์บนจอคอมพิวเตอร์ และ 1 คอลัมน์บนจอมือถือ */
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                        {filteredRooms.map((room) => (
+                            <RoomCard
+                                key={room.room_id}
+                                room={room}
+                                waterRate={waterRate}
+                                electricRate={electricRate}
+                                onOpenModal={handleOpenModal}
+                            />
                         ))}
                     </div>
                 )}
@@ -438,8 +678,8 @@ export default function BookRoomPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl my-auto flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
                         <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-[2rem]">
-                            <h3 className="text-xl font-black text-slate-800">
-                                นัดหมายดูห้อง <span className="text-blue-600">{selectedRoom.room_number}</span>
+                            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                                <span>🚪</span> นัดหมายดูห้อง <span className="text-blue-600">{selectedRoom.room_number}</span>
                             </h3>
                             <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors active:scale-95">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -447,8 +687,25 @@ export default function BookRoomPage() {
                         </div>
 
                         <div className="p-6 overflow-y-auto custom-scrollbar">
-                            <form id="booking-form" onSubmit={handleSubmitBooking} className="space-y-8">
+                            {/* Room Quick Summary in Modal */}
+                            <div className="flex items-center gap-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 mb-6">
+                                <img
+                                    src={selectedRoomImage}
+                                    alt={`ห้อง ${selectedRoom.room_number}`}
+                                    className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-lg font-black text-slate-800 truncate">ห้อง {selectedRoom.room_number}</h4>
+                                        <span className="font-black text-blue-600 text-lg">{Number(selectedRoom.price_per_month).toLocaleString()} ฿/ด.</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                                        ชั้น {selectedRoom.floor} • {selectedRoom.room_types?.name || 'ห้องมาตรฐาน'}
+                                    </p>
+                                </div>
+                            </div>
 
+                            <form id="booking-form" onSubmit={handleSubmitBooking} className="space-y-8">
                                 {/* Info Box with Rules */}
                                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm space-y-3">
                                     <div className="flex gap-3">
@@ -537,7 +794,6 @@ export default function BookRoomPage() {
                                     <h4 className="font-black text-slate-800 text-lg border-b border-slate-100 pb-2">3. สแกนชำระเงินมัดจำ {bookingDepositAmount} บาท</h4>
 
                                     <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-stretch">
-                                        {/* QR Code Placeholder (Uses promptpay.io if bankAccountNo exists, else generic) */}
                                         <div className="w-48 h-48 bg-white border-2 border-slate-200 rounded-2xl flex flex-col items-center justify-center p-2 shadow-sm shrink-0">
                                             {promptpayId ? (
                                                 <div className="flex flex-col items-center justify-center w-full h-full p-2">
@@ -548,7 +804,7 @@ export default function BookRoomPage() {
                                                         includeMargin={true}
                                                     />
                                                     <p className="mt-2 text-[10px] text-slate-500 text-center font-medium leading-tight">
-                                                        สแกนผ่านแอปธนาคาร ยอดเงิน {bookingDepositAmount} บาท จะระบุให้อัตโนมัติ
+                                                        สแกนผ่านแอปธนาคาร ยอด {bookingDepositAmount} ฿
                                                     </p>
                                                 </div>
                                             ) : (
@@ -557,7 +813,6 @@ export default function BookRoomPage() {
                                                     alt="PromptPay QR"
                                                     className="w-full h-full object-contain"
                                                     onError={(e) => {
-                                                        // Fallback if promptpay fails
                                                         (e.target as HTMLImageElement).src = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/QR_code_for_mobile_English_Wikipedia.svg/1200px-QR_code_for_mobile_English_Wikipedia.svg.png";
                                                         (e.target as HTMLImageElement).className = "w-full h-full object-contain opacity-20";
                                                     }}

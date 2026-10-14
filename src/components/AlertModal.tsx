@@ -13,7 +13,7 @@ export default function AlertModal({ isOpen, type, title, message, onConfirm, on
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-xl animate-in fade-in zoom-in duration-200">
         
         {type === 'confirm' && (

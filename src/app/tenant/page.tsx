@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/backend/lib/supabase';
 import InvoiceDocument from '@/components/InvoiceDocument';
+import generatePayload from 'promptpay-qr';
+import { QRCodeSVG } from 'qrcode.react';
 
 const formatThaiDateShort = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -59,6 +61,9 @@ export default function TenantDashboard() {
     const [userName, setUserName] = useState<string>('');
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     const [cancelCountdown, setCancelCountdown] = useState(5);
+    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+    const [copiedBank, setCopiedBank] = useState(false);
+    const qrRef = useRef<HTMLDivElement>(null);
 
     // อ้างอิงถึง input file ที่ซ่อนไว้
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -353,6 +358,96 @@ export default function TenantDashboard() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleDownloadQr = () => {
+        try {
+            if (!qrRef.current) return;
+            const svg = qrRef.current.querySelector('svg');
+            if (!svg) return;
+
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const scale = 3;
+            const width = 240 * scale;
+            const height = 240 * scale;
+            canvas.width = width;
+            canvas.height = height;
+
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            const img = new Image();
+
+            img.onload = () => {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+                URL.revokeObjectURL(url);
+
+                const pngUrl = canvas.toDataURL('image/png');
+                const downloadLink = document.createElement('a');
+                downloadLink.href = pngUrl;
+                downloadLink.download = `PromptPay-QR-${invoice?.room_number || 'Room'}-${invoice?.calculatedTotal || 0}.png`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+                downloadLink.download = `PromptPay-QR-${invoice?.room_number || 'Room'}.svg`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            };
+
+            img.src = url;
+        } catch (err) {
+            console.error('Download QR error:', err);
+            alert('เกิดข้อผิดพลาดในการบันทึกรูปภาพ กรุณาแคปหน้าจอ');
+        }
+    };
+
+    const handleCopyBankAccount = (accountNo?: string) => {
+        const textToCopy = accountNo || dormSettings?.bank_account_no || dormSettings?.promptpay_id || '';
+        if (!textToCopy) return;
+
+        const cleanNo = textToCopy.replace(/[^0-9]/g, '');
+        const toCopy = cleanNo || textToCopy;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(toCopy)
+                .then(() => {
+                    setCopiedBank(true);
+                    setTimeout(() => setCopiedBank(false), 2500);
+                })
+                .catch(() => fallbackCopy(toCopy));
+        } else {
+            fallbackCopy(toCopy);
+        }
+    };
+
+    const fallbackCopy = (text: string) => {
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setCopiedBank(true);
+            setTimeout(() => setCopiedBank(false), 2500);
+        } catch (err) {
+            console.error('Copy error:', err);
+            alert('คัดลอกเลขบัญชี: ' + text);
+        }
+    };
+
     // Loading State
     if (loading) {
         return (
@@ -382,6 +477,19 @@ export default function TenantDashboard() {
         );
     }
 
+    // คำนวณ Payload สำหรับ PromptPay QR Code
+    const promptpayTarget = (dormSettings?.promptpay_id || dormSettings?.bank_account_no || dormSettings?.phone || '').replace(/[^0-9]/g, '');
+    const qrAmount = Number(invoice?.calculatedTotal || 0);
+
+    let qrPayload = '';
+    if (promptpayTarget) {
+        try {
+            qrPayload = generatePayload(promptpayTarget, { amount: qrAmount > 0 ? qrAmount : undefined });
+        } catch (err) {
+            console.error('generatePayload error:', err);
+        }
+    }
+
     // กำหนดสีและป้ายสถานะ
     let statusBadge = null;
     let actionButton = null;
@@ -407,7 +515,7 @@ export default function TenantDashboard() {
 
     if (isPending || isRejected) {
         actionButton = (
-            <div className="space-y-4">
+            <div className="space-y-3">
                 <input
                     type="file"
                     accept="image/*"
@@ -416,6 +524,21 @@ export default function TenantDashboard() {
                     onChange={handleFileChange}
                 />
                 
+                {/* QR Code Button — show only when no slip selected yet */}
+                {!selectedFile && !previewUrl && (
+                    <button
+                        type="button"
+                        onClick={() => setIsQrModalOpen(true)}
+                        className="w-full font-bold py-4 px-4 rounded-2xl transition-all shadow-md bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white flex items-center justify-center gap-3 active:scale-95 cursor-pointer"
+                    >
+                        <span className="text-2xl">📱</span>
+                        <div className="flex flex-col items-start">
+                            <span className="text-base leading-tight">สแกนจ่ายด้วย QR Code PromptPay</span>
+                            <span className="text-xs font-medium text-violet-200">ยอดรวมสุทธิ {invoice?.calculatedTotal?.toLocaleString()} ฿</span>
+                        </div>
+                    </button>
+                )}
+
                 {selectedFile && previewUrl ? (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-3 animate-in fade-in zoom-in-95 shadow-inner">
                         <div className="relative rounded-xl overflow-hidden mb-1 border border-slate-200 bg-white w-full flex justify-center">
@@ -781,7 +904,7 @@ export default function TenantDashboard() {
                 )}
             </main>
 
-            {/* Modal ใบเสร็จและรายละเอียดสลิป */}            {/* Modal ใบเสร็จและรายละเอียดสลิป */}
+            {/* Modal ใบเสร็จและรายละเอียดสลิป */}
             {selectedReceipt && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex justify-center items-center p-4 transition-opacity">
                     <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 relative">
@@ -942,6 +1065,190 @@ export default function TenantDashboard() {
                                 className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
                             >
                                 ปิดหน้าต่าง
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal สแกนจ่ายด้วย QR Code PromptPay */}
+            {isQrModalOpen && invoice && (
+                <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[70] flex justify-center items-center p-4 transition-opacity overflow-y-auto custom-scrollbar">
+                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col my-auto border border-slate-100">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center font-bold">
+                                    📱
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-slate-800 leading-tight">
+                                        สแกนจ่ายด้วย QR Code
+                                    </h2>
+                                    <p className="text-xs text-slate-500">
+                                        ห้อง {invoice.room_number || '-'} • รอบบิล {formatThaiDateShort(invoice.month_year)}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsQrModalOpen(false)}
+                                className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto flex flex-col items-center gap-4">
+                            {/* Total Amount Badge */}
+                            <div className="w-full bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100/80 rounded-2xl p-4 text-center">
+                                <p className="text-xs font-bold text-violet-600 uppercase tracking-wider mb-1">ยอดชำระสุทธิ (Total Amount)</p>
+                                <div className="flex items-baseline justify-center gap-1.5 text-violet-950">
+                                    <span className="text-4xl font-black tracking-tight">{Number(invoice.calculatedTotal || 0).toLocaleString()}</span>
+                                    <span className="text-base font-bold text-violet-700">บาท</span>
+                                </div>
+                            </div>
+
+                            {/* PromptPay QR Frame */}
+                            <div className="w-full max-w-[280px] bg-white rounded-2xl border-2 border-slate-200 shadow-md overflow-hidden flex flex-col items-center">
+                                {/* Thai QR Payment Banner */}
+                                <div className="w-full bg-[#003B71] text-white py-2 px-3 text-center flex items-center justify-center gap-2 shadow-sm">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[11px] font-black tracking-wider uppercase">THAI QR PAYMENT</span>
+                                        <span className="text-[10px] text-blue-200 font-medium">พร้อมเพย์ PromptPay</span>
+                                    </div>
+                                </div>
+
+                                {/* QR SVG container */}
+                                <div ref={qrRef} className="p-4 bg-white flex flex-col items-center justify-center">
+                                    {qrPayload ? (
+                                        <QRCodeSVG
+                                            value={qrPayload}
+                                            size={200}
+                                            level="M"
+                                            includeMargin={false}
+                                        />
+                                    ) : (
+                                        <div className="w-48 h-48 flex flex-col items-center justify-center text-center p-3 text-slate-400">
+                                            <span className="text-3xl mb-2">⚠️</span>
+                                            <p className="text-xs font-semibold text-slate-600">ยังไม่ได้ระบุหมายเลขพร้อมเพย์</p>
+                                            <p className="text-[11px] text-slate-400 mt-1">กรุณาโอนเงินผ่านเลขบัญชีธนาคารด้านล่าง</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="w-full bg-slate-50 py-2 px-3 border-t border-slate-100 text-center">
+                                    <p className="text-[11px] text-slate-500 font-medium">
+                                        สแกนผ่านแอปธนาคาร ยอดเงินจะระบุอัตโนมัติ
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Bank Details from dorm_settings */}
+                            <div className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs space-y-2.5">
+                                <div className="flex justify-between items-center text-slate-500 font-semibold border-b border-slate-200/60 pb-2">
+                                    <span>ช่องทางโอนเงิน / บัญชีหอพัก</span>
+                                    <span className="text-slate-400">{dormSettings?.dorm_name || 'หอพัก'}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-500">ธนาคาร:</span>
+                                    <span className="font-bold text-slate-800 text-right">{dormSettings?.bank_name || '-'}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-500">ชื่อบัญชี:</span>
+                                    <span className="font-bold text-slate-800 text-right">{dormSettings?.bank_account_name || dormSettings?.dorm_name || '-'}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center bg-white px-3 py-2 rounded-xl border border-slate-200/60">
+                                    <div>
+                                        <span className="text-[10px] text-slate-400 block font-bold uppercase">เลขที่บัญชี</span>
+                                        <span className="font-mono font-black text-slate-900 text-sm tracking-wider">
+                                            {dormSettings?.bank_account_no || '-'}
+                                        </span>
+                                    </div>
+                                    {dormSettings?.bank_account_no && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCopyBankAccount(dormSettings.bank_account_no)}
+                                            className={`text-xs px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 active:scale-95 ${copiedBank ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                                        >
+                                            {copiedBank ? (
+                                                <>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                    คัดลอกแล้ว
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                                    คัดลอก
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {dormSettings?.promptpay_id && (
+                                    <div className="flex justify-between items-center pt-1 text-slate-600">
+                                        <span className="text-slate-500">พร้อมเพย์ (PromptPay):</span>
+                                        <span className="font-mono font-bold text-slate-800">{dormSettings.promptpay_id}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Action Buttons: Save QR & Copy Account */}
+                            <div className="w-full grid grid-cols-2 gap-3 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadQr}
+                                    disabled={!qrPayload}
+                                    className={`py-3 px-3 font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 ${qrPayload ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-600/20 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    บันทึกภาพ QR
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleCopyBankAccount(dormSettings?.bank_account_no)}
+                                    disabled={!dormSettings?.bank_account_no}
+                                    className={`py-3 px-3 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 active:scale-95 border ${copiedBank ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 shadow-sm cursor-pointer'}`}
+                                >
+                                    {copiedBank ? (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600"><polyline points="20 6 9 17 4 12"/></svg>
+                                            <span>คัดลอกสำเร็จ!</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                            <span>คัดลอกเลขบัญชี</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsQrModalOpen(false);
+                                    handleTriggerUpload();
+                                }}
+                                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-blue-600/20 active:scale-95 flex items-center justify-center gap-1.5"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" y2="15" /></svg>
+                                โอนเงินแล้ว แนบสลิปเลย
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsQrModalOpen(false)}
+                                className="px-5 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-xl border border-slate-200 transition-colors active:scale-95"
+                            >
+                                ปิด
                             </button>
                         </div>
                     </div>
