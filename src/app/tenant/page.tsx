@@ -20,6 +20,18 @@ const formatThaiDateShort = (dateStr: string) => {
     return dateStr;
 };
 
+const formatDateThai = (dateStr: string) => {
+    if (!dateStr) return '-';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+        return `${d.getDate()} ${thaiMonths[d.getMonth()]} ${d.getFullYear() + 543}`;
+    } catch {
+        return dateStr;
+    }
+};
+
 const getMeterCycle = (issueDateStr: string, meterDay: number) => {
     if (!issueDateStr || !meterDay) return '';
     const [yStr, mStr, dStr] = issueDateStr.split('-');
@@ -59,6 +71,7 @@ export default function TenantDashboard() {
     const [hasRoom, setHasRoom] = useState<boolean>(true);
     const [activeBooking, setActiveBooking] = useState<any | null>(null);
     const [userName, setUserName] = useState<string>('');
+    const [activeContract, setActiveContract] = useState<any | null>(null);
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     const [cancelCountdown, setCancelCountdown] = useState(5);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -106,8 +119,12 @@ export default function TenantDashboard() {
                 .from('contracts')
                 .select(`
                     contracts_id, 
+                    start_date,
+                    end_date,
+                    is_active,
+                    tenant_id,
                     room_id,
-                    rooms ( room_number, price_per_month )
+                    rooms ( room_number, price_per_month, floor )
                 `)
                 .eq('tenant_id', userRecord.user_id)
                 .eq('is_active', true)
@@ -121,6 +138,7 @@ export default function TenantDashboard() {
                 // ไม่มีสัญญาเช่า
                 setHasRoom(false);
                 setInvoice(null);
+                setActiveContract(null);
                 
                 // Fetch active booking instead
                 const { data: bookingData } = await supabase
@@ -143,7 +161,8 @@ export default function TenantDashboard() {
             } else {
                 setHasRoom(true);
                 setActiveBooking(null);
-                setTenantRoomNumber((contract.rooms as any)?.room_number || '-');
+                const rData = Array.isArray(contract.rooms) ? contract.rooms[0] : contract.rooms;
+                setTenantRoomNumber(rData?.room_number || '-');
             }
 
             // 3. หาบิลทั้งหมดจากตาราง invoices โดยตรง (ตัดบิลร่างทิ้ง) เรียงจากใหม่ไปเก่า
@@ -158,10 +177,37 @@ export default function TenantDashboard() {
                 throw fetchError;
             }
 
-            if (invoicesData && invoicesData.length > 0) {
-                // ดึงข้อมูลห้องจาก object ที่ Join มาได้
-                const roomData = Array.isArray(contract.rooms) ? contract.rooms[0] : contract.rooms;
+            const roomData = Array.isArray(contract.rooms) ? contract.rooms[0] : contract.rooms;
 
+            // คำนวณเงินมัดจำ/ประกัน: ตรวจสอบจากรายการ additional_items ในบิล หรือใช้ค่าเช่า 1 เดือนเป็นค่าตั้งต้น
+            let contractDeposit = Number(roomData?.price_per_month || 0);
+            if (invoicesData && invoicesData.length > 0) {
+                for (const inv of invoicesData) {
+                    if (Array.isArray(inv.additional_items)) {
+                        const item = inv.additional_items.find((x: any) =>
+                            x?.name?.includes('ประกัน') || x?.name?.includes('มัดจำ')
+                        );
+                        if (item && item.amount) {
+                            contractDeposit = Number(item.amount);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            setActiveContract({
+                contracts_id: contract.contracts_id,
+                start_date: contract.start_date,
+                end_date: contract.end_date,
+                is_active: contract.is_active,
+                room_id: contract.room_id,
+                room_number: roomData?.room_number || '-',
+                floor: roomData?.floor || '1',
+                rent_price: Number(roomData?.price_per_month || 0),
+                deposit_amount: contractDeposit
+            });
+
+            if (invoicesData && invoicesData.length > 0) {
                 const historyWithCalc = invoicesData.map(inv => {
                     // คำนวณยอดเงินตามสูตร: ค่าเช่าห้อง + (ค่าน้ำ) + (ค่าไฟ) + vat + rounding
                     const rent = Number(roomData?.price_per_month || 0);
@@ -820,6 +866,68 @@ export default function TenantDashboard() {
                     )
                 ) : (
                     <>
+                        {/* Active Contract Card */}
+                        {activeContract && (
+                            <section className="bg-white rounded-[2rem] p-5 sm:p-6 shadow-sm border border-slate-200/80 relative overflow-hidden transition-all hover:shadow-md">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xl shadow-sm">
+                                            📜
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h2 className="text-base font-black text-slate-800 tracking-tight">ข้อมูลสัญญาเช่าห้องพัก</h2>
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                    มีผลบังคับใช้
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 mt-0.5">สัญญาเช่าห้องพักฉบับปัจจุบันของคุณ (Read-Only)</p>
+                                        </div>
+                                    </div>
+                                    <a
+                                        href={`/contracts/print/${activeContract.contracts_id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all shadow-sm active:scale-95 group shrink-0"
+                                    >
+                                        <span>📄 ดูสัญญาเช่าฉบับเต็ม</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                    </a>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+                                    <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">รหัสสัญญา</span>
+                                        <span className="text-sm font-black text-slate-800 font-mono">
+                                            #CN-{String(activeContract.contracts_id).padStart(4, '0')}
+                                        </span>
+                                    </div>
+
+                                    <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">ห้อง / ชั้น</span>
+                                        <span className="text-sm font-black text-emerald-700">
+                                            ห้อง {activeContract.room_number} <span className="text-xs font-normal text-slate-500">(ชั้น {activeContract.floor})</span>
+                                        </span>
+                                    </div>
+
+                                    <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 col-span-2 sm:col-span-1">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">ระยะเวลาสัญญา</span>
+                                        <span className="text-xs sm:text-[13px] font-bold text-slate-700 block leading-tight">
+                                            {formatDateThai(activeContract.start_date)} - {formatDateThai(activeContract.end_date)}
+                                        </span>
+                                    </div>
+
+                                    <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 col-span-2 sm:col-span-1">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">ค่าเช่า / เงินประกัน</span>
+                                        <div className="text-xs font-bold text-slate-800">
+                                            {activeContract.rent_price?.toLocaleString()} ฿ <span className="text-[10px] font-normal text-slate-500">(ประกัน {activeContract.deposit_amount?.toLocaleString()} ฿)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
                         {/* Hero Bill (Latest Invoice) */}
                         <section>
                             {invoice ? (
@@ -1456,6 +1564,55 @@ export default function TenantDashboard() {
                                     <span>ℹ️</span> *หากต้องการแก้ไขข้อมูลส่วนตัว กรุณาติดต่อผู้ดูแลหอพัก
                                 </p>
                             </div>
+
+                            {/* ข้อมูลสัญญาเช่าปัจจุบัน (Read-Only) */}
+                            {activeContract && (
+                                <div className="bg-indigo-50/50 rounded-2xl p-4 sm:p-5 border border-indigo-100/80 space-y-3.5">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>📜</span> สัญญาเช่าปัจจุบัน
+                                        </h4>
+                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            มีผลบังคับใช้
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2.5 text-xs">
+                                        <div className="bg-white/90 p-3 rounded-xl border border-indigo-50/80">
+                                            <span className="text-[11px] font-bold text-slate-400 block mb-0.5">รหัสสัญญา</span>
+                                            <span className="font-bold text-slate-800 font-mono">#CN-{String(activeContract.contracts_id).padStart(4, '0')}</span>
+                                        </div>
+                                        <div className="bg-white/90 p-3 rounded-xl border border-indigo-50/80">
+                                            <span className="text-[11px] font-bold text-slate-400 block mb-0.5">ห้องพัก</span>
+                                            <span className="font-bold text-emerald-700">ห้อง {activeContract.room_number} (ชั้น {activeContract.floor})</span>
+                                        </div>
+                                        <div className="bg-white/90 p-3 rounded-xl border border-indigo-50/80">
+                                            <span className="text-[11px] font-bold text-slate-400 block mb-0.5">ค่าเช่ารายเดือน</span>
+                                            <span className="font-bold text-slate-800">{activeContract.rent_price?.toLocaleString()} บาท/เดือน</span>
+                                        </div>
+                                        <div className="bg-white/90 p-3 rounded-xl border border-indigo-50/80">
+                                            <span className="text-[11px] font-bold text-slate-400 block mb-0.5">เงินประกันความเสียหาย</span>
+                                            <span className="font-bold text-slate-800">{activeContract.deposit_amount?.toLocaleString()} บาท</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/90 p-3 rounded-xl border border-indigo-50/80 text-xs">
+                                        <span className="text-[11px] font-bold text-slate-400 block mb-0.5">ระยะเวลาสัญญา</span>
+                                        <span className="font-bold text-slate-700">{formatDateThai(activeContract.start_date)} ถึง {formatDateThai(activeContract.end_date)}</span>
+                                    </div>
+
+                                    <a
+                                        href={`/contracts/print/${activeContract.contracts_id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs active:scale-[0.98]"
+                                    >
+                                        <span>📄 ดูสัญญาเช่าฉบับเต็ม (เปิดแท็บใหม่)</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                    </a>
+                                </div>
+                            )}
 
                             {/* ส่วนที่ 2: เปลี่ยนรหัสผ่าน */}
                             <form onSubmit={handleChangePassword} className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
