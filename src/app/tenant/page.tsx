@@ -429,12 +429,13 @@ export default function TenantDashboard() {
 
             const publicUrl = publicUrlData.publicUrl;
 
-            // 4. อัปเดตข้อมูลในตาราง invoices เซ็ตค่า status เปลี่ยนเป็น pending (รอตรวจสอบ)
+            // 4. อัปเดตข้อมูลในตาราง invoices เซ็ตค่า status เปลี่ยนเป็น pending (รอตรวจสอบ) พร้อมบันทึก paid_at
             const { error: updateError } = await supabase
                 .from('invoices')
                 .update({
                     status: 'pending',
-                    slip_image: publicUrl
+                    slip_image: publicUrl,
+                    paid_at: new Date().toISOString()
                 })
                 .eq('invoices_id', invoice.invoices_id);
 

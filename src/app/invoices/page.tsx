@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
@@ -29,6 +29,18 @@ const getMeterCycle = (issueDateStr: string, meterDay: number) => {
   };
 
   return `${formatThaiDate(previousMonthDate)} - ${formatThaiDate(currentMonthDate)}`;
+};
+
+const formatDateTime = (dateString?: string) => {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
 export default function InvoicesManagementPage() {
@@ -63,11 +75,28 @@ export default function InvoicesManagementPage() {
   // Slip Inspector states
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [isMobileSlipModalOpen, setIsMobileSlipModalOpen] = useState(false);
+  const slipInspectorRef = useRef<HTMLDivElement>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // Close Lightbox on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && lightboxImage) {
+        setLightboxImage(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxImage]);
 
   // Filters state
   const [filterMonth, setFilterMonth] = useState('');
   const [filterRoom, setFilterRoom] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Settings State
   const [cutoffDay, setCutoffDay] = useState(27);
@@ -126,20 +155,54 @@ export default function InvoicesManagementPage() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('view_invoice_details')
-        .select('*')
-        .order('invoices_id', { ascending: false });
+      const [viewRes, invRes] = await Promise.all([
+        supabase
+          .from('view_invoice_details')
+          .select('*')
+          .order('invoices_id', { ascending: false }),
+        supabase
+          .from('invoices')
+          .select('invoices_id, paid_at, due_date, additional_items')
+      ]);
 
-      if (error) throw error;
-      if (data) {
-        setInvoices(data);
+      if (viewRes.error) throw viewRes.error;
+
+      if (viewRes.data) {
+        const invMap = new Map();
+        if (invRes.data) {
+          invRes.data.forEach((inv: any) => {
+            invMap.set(inv.invoices_id, inv);
+          });
+        }
+
+        const merged = viewRes.data.map((item: any) => {
+          const rawInv = invMap.get(item.invoices_id);
+          return {
+            ...item,
+            paid_at: rawInv?.paid_at || item.paid_at || null,
+            due_date: rawInv?.due_date || item.due_date || null,
+            additional_items: rawInv?.additional_items || item.additional_items || null,
+          };
+        });
+
+        setInvoices(merged);
       }
     } catch (err: any) {
       console.error("Fetch Invoices Error:", err);
       setError(err.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลบิลค่าเช่า');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRoomCardClick = (invoice: any) => {
+    setSelectedInvoiceId(invoice.invoices_id);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsMobileSlipModalOpen(true);
+    } else {
+      if (slipInspectorRef.current) {
+        slipInspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
 
@@ -474,6 +537,34 @@ export default function InvoicesManagementPage() {
     return matchMonth && matchRoom && matchStatus;
   });
 
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterMonth, filterRoom, filterStatus]);
+
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedInvoices = filteredInvoices.slice(startIndex, startIndex + itemsPerPage);
+  const totalItems = filteredInvoices.length;
+  const startItem = totalItems === 0 ? 0 : startIndex + 1;
+  const endItem = Math.min(startIndex + itemsPerPage, totalItems);
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   const handleExportExcel = () => {
     if (filteredInvoices.length === 0) {
       alert("ไม่มีข้อมูลสำหรับส่งออก");
@@ -490,6 +581,7 @@ export default function InvoicesManagementPage() {
       return {
         'วันที่ออกบิล': formatMonthYear(invoice.month_year),
         'วันครบกำหนดชำระ': formatDate(invoice.due_date),
+        'วันเวลาชำระเงิน': invoice.paid_at ? formatDateTime(invoice.paid_at) : '-',
         'ห้องพัก': invoice.room_number || '-',
         'หน่วยน้ำที่ใช้': invoice.water_unit || 0,
         'ราคาต่อหน่วยน้ำ (฿)': invoice.water_rate || 0,
@@ -508,6 +600,7 @@ export default function InvoicesManagementPage() {
     worksheet['!cols'] = [
       { wch: 15 }, // วันที่ออกบิล
       { wch: 18 }, // วันครบกำหนดชำระ
+      { wch: 20 }, // วันเวลาชำระเงิน
       { wch: 10 }, // ห้องพัก
       { wch: 15 }, // หน่วยน้ำที่ใช้
       { wch: 20 }, // ราคาต่อหน่วยน้ำ
@@ -630,12 +723,33 @@ export default function InvoicesManagementPage() {
                       return invDate >= cycleStartDate;
                     });
 
+                    const isCurrentSelected = currentMonthInvoice && selectedInvoiceId === currentMonthInvoice.invoices_id;
+
                     return (
-                      <div key={room.room_id} className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md transition-shadow">
+                      <div
+                        key={room.room_id}
+                        onClick={() => {
+                          if (currentMonthInvoice) {
+                            handleRoomCardClick(currentMonthInvoice);
+                          }
+                        }}
+                        className={`bg-white rounded-2xl p-5 border shadow-sm flex flex-col relative overflow-hidden transition-all ${
+                          currentMonthInvoice
+                            ? isCurrentSelected
+                              ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md cursor-pointer'
+                              : 'border-slate-200/80 hover:border-blue-300 hover:shadow-md cursor-pointer group'
+                            : 'border-slate-200/60'
+                        }`}
+                      >
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">ห้องพัก</p>
-                            <h4 className="text-3xl font-black text-slate-800 tracking-tight">{room.room_number}</h4>
+                            <h4 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                              <span>{room.room_number}</span>
+                              {isCurrentSelected && (
+                                <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full uppercase tracking-wider">กำลังตรวจ</span>
+                              )}
+                            </h4>
                           </div>
                           <div className="text-right">
                             {isOccupied ? (
@@ -657,20 +771,63 @@ export default function InvoicesManagementPage() {
                             currentMonthInvoice.status === 'draft' ? (
                               <Link
                                 href={`/invoices/editor/${currentMonthInvoice.invoices_id}`}
+                                onClick={(e) => e.stopPropagation()}
                                 className="flex items-center justify-center gap-1.5 py-2.5 w-full bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-700 rounded-xl font-bold text-sm border border-slate-200 transition-all shadow-sm active:scale-95 group-hover:ring-2 ring-slate-200/50"
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2-2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                 แก้ไขแบบร่าง (คลิก)
                               </Link>
                             ) : (
-                              <div className="flex items-center justify-center gap-1.5 py-2.5 w-full bg-emerald-50 text-emerald-600 rounded-xl font-bold text-sm border border-emerald-100 shadow-sm">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                ออกบิลแล้ว
+                              <div
+                                className={`flex items-center justify-between py-2.5 px-3 w-full rounded-xl font-bold text-sm border transition-all shadow-sm ${
+                                  currentMonthInvoice.status === 'pending'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200 ring-2 ring-blue-400/20 shadow-blue-100'
+                                    : currentMonthInvoice.status === 'paid'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : currentMonthInvoice.status === 'rejected'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  {currentMonthInvoice.status === 'pending' && (
+                                    <>
+                                      <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                      </span>
+                                      <span>รอตรวจสอบ</span>
+                                    </>
+                                  )}
+                                  {currentMonthInvoice.status === 'paid' && (
+                                    <>
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                      <span>ชำระแล้ว</span>
+                                    </>
+                                  )}
+                                  {currentMonthInvoice.status === 'rejected' && (
+                                    <>
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                                      <span>สลิปถูกตีกลับ</span>
+                                    </>
+                                  )}
+                                  {currentMonthInvoice.status !== 'pending' && currentMonthInvoice.status !== 'paid' && currentMonthInvoice.status !== 'rejected' && (
+                                    <>
+                                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                      <span>รอชำระ</span>
+                                    </>
+                                  )}
+                                </span>
+                                <span className="text-xs font-semibold opacity-75 group-hover:opacity-100 flex items-center gap-0.5">
+                                  <span>ตรวจสลิป</span>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                </span>
                               </div>
                             )
                           ) : (
                             <Link
                               href={`/invoices/editor/new?contract_id=${contract.contracts_id}`}
+                              onClick={(e) => e.stopPropagation()}
                               className="flex items-center justify-center gap-1.5 py-2.5 w-full bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 rounded-xl font-bold text-sm border border-amber-200 transition-all shadow-sm active:scale-95 group-hover:ring-2 ring-amber-200/50"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -798,7 +955,7 @@ export default function InvoicesManagementPage() {
                         </div>
                       </div>
                     ) : (
-                      filteredInvoices.map((invoice) => (
+                      paginatedInvoices.map((invoice) => (
                         <div 
                           key={invoice.invoices_id} 
                           className={`p-4 transition-colors ${selectedInvoiceId === invoice.invoices_id ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`} 
@@ -808,10 +965,16 @@ export default function InvoicesManagementPage() {
                             <div className="font-bold text-slate-800 text-base">ห้อง {invoice.room_number || '-'}</div>
                             <div className="text-xs text-slate-500 font-medium">{formatMonthYear(invoice.month_year)}</div>
                           </div>
-                          <div className="flex justify-between items-center mb-3">
+                          <div className="flex justify-between items-center mb-2">
                             <div className="font-bold text-lg text-slate-700">{Number(invoice.total_amount).toLocaleString()} ฿</div>
                             {getStatusBadge(invoice)}
                           </div>
+                          {invoice.paid_at && (
+                            <div className="text-xs text-slate-600 flex items-center gap-1.5 mb-3 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 font-mono">
+                              <span className="text-slate-400 font-sans">ชำระเมื่อ:</span>
+                              <span className="font-semibold">{formatDateTime(invoice.paid_at)}</span>
+                            </div>
+                          )}
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleSelectInvoice(invoice.invoices_id); }} 
                             className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-sm transition-all"
@@ -830,13 +993,14 @@ export default function InvoicesManagementPage() {
                         <tr>
                           <th className="px-4 py-4 whitespace-nowrap">เดือน / ห้องพัก</th>
                           <th className="px-4 py-4 whitespace-nowrap">ยอดรวมสุทธิ</th>
+                          <th className="px-4 py-4 whitespace-nowrap">วันเวลาชำระเงิน</th>
                           <th className="px-4 py-4 whitespace-nowrap">สถานะ</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {filteredInvoices.length === 0 ? (
                           <tr>
-                            <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
+                            <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
                               <div className="flex flex-col items-center justify-center">
                                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-2xl mb-3">📄</div>
                                 <p>ไม่พบรายการบิลที่ตรงกับตัวกรอง</p>
@@ -844,7 +1008,7 @@ export default function InvoicesManagementPage() {
                             </td>
                           </tr>
                         ) : (
-                          filteredInvoices.map((invoice) => (
+                          paginatedInvoices.map((invoice) => (
                             <tr 
                               key={invoice.invoices_id} 
                               onClick={() => handleSelectInvoice(invoice.invoices_id)}
@@ -858,6 +1022,16 @@ export default function InvoicesManagementPage() {
                                 <p className="font-bold text-slate-700">{Number(invoice.total_amount).toLocaleString()} ฿</p>
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap">
+                                {invoice.paid_at ? (
+                                  <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200/80 inline-flex items-center gap-1.5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    {formatDateTime(invoice.paid_at)}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-slate-400 font-medium">-</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap">
                                 {getStatusBadge(invoice)}
                               </td>
                             </tr>
@@ -866,13 +1040,76 @@ export default function InvoicesManagementPage() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination Controls */}
+                  {filteredInvoices.length > 0 && (
+                    <div className="px-4 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
+                      {/* Left side: range summary */}
+                      <div className="text-slate-500 font-medium text-xs sm:text-sm text-center sm:text-left">
+                        แสดง <span className="font-bold text-slate-800">{startItem}</span> - <span className="font-bold text-slate-800">{endItem}</span> จากทั้งหมด <span className="font-bold text-slate-800">{totalItems}</span> รายการ
+                      </div>
+
+                      {/* Right side: navigation buttons */}
+                      <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                        {/* Previous Button (<) */}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 font-semibold text-xs hover:bg-slate-100 hover:text-slate-800 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-slate-600 transition-all shadow-sm cursor-pointer"
+                          title="หน้าก่อนหน้า"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                          <span className="hidden sm:inline">ก่อนหน้า</span>
+                        </button>
+
+                        {/* Page Numbers */}
+                        {getPageNumbers().map((page, idx) => {
+                          if (page === '...') {
+                            return (
+                              <span key={`dots-${idx}`} className="px-2 py-1 text-slate-400 font-bold select-none text-xs">
+                                ...
+                              </span>
+                            );
+                          }
+                          const isCurrent = page === currentPage;
+                          return (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => setCurrentPage(Number(page))}
+                              className={`min-w-[32px] h-8 px-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center cursor-pointer ${
+                                isCurrent
+                                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-600/30'
+                                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-95'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+
+                        {/* Next Button (>) */}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 font-semibold text-xs hover:bg-slate-100 hover:text-slate-800 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-slate-600 transition-all shadow-sm cursor-pointer"
+                          title="หน้าถัดไป"
+                        >
+                          <span className="hidden sm:inline">ถัดไป</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               </div>
 
               {/* Right Side: 40% (Sticky Slip Inspector) - Desktop Only */}
               <div className="hidden lg:block w-full lg:w-[40%]">
-                <div className="sticky top-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 flex flex-col min-h-[500px]">
+                <div ref={slipInspectorRef} className="sticky top-6 bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 flex flex-col min-h-[500px]">
                   <h3 className="text-lg font-black text-slate-800 mb-4 tracking-tight flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" className="text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
                     แผงตรวจสลิป
@@ -885,7 +1122,7 @@ export default function InvoicesManagementPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col h-full">
-                      <div className="flex justify-between items-start mb-4">
+                      <div className="flex justify-between items-start mb-2">
                         <div>
                           <p className="text-sm text-slate-500 font-medium">บิลห้อง {selectedInvoice.room_number || '-'}</p>
                           <p className="text-2xl font-bold text-slate-800">{Number(selectedInvoice.total_amount).toLocaleString()} ฿</p>
@@ -894,6 +1131,17 @@ export default function InvoicesManagementPage() {
                           {getStatusBadge(selectedInvoice)}
                         </div>
                       </div>
+
+                      {/* วันเวลาชำระเงินจริง */}
+                      {selectedInvoice.paid_at && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-600 mb-3">
+                          <span className="font-semibold text-slate-500">วันเวลาชำระเงิน:</span>
+                          <span className="font-bold text-slate-800 font-mono flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            {formatDateTime(selectedInvoice.paid_at)}
+                          </span>
+                        </div>
+                      )}
 
                       {selectedInvoice.status === 'draft' ? (
                         <div className="flex-1 flex flex-col items-center justify-center py-10">
@@ -921,9 +1169,25 @@ export default function InvoicesManagementPage() {
                         </div>
                       ) : (
                         <>
-                          <div className="bg-slate-100/50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center mb-6 relative min-h-[250px]">
+                          <div className="bg-slate-100/50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center mb-6 relative min-h-[250px] group">
                             {selectedInvoice.slip_image ? (
-                              <img src={selectedInvoice.slip_image} alt="Slip" className="max-w-full max-h-[350px] object-contain rounded-xl" />
+                              <div
+                                onClick={() => setLightboxImage(selectedInvoice.slip_image)}
+                                className="relative cursor-zoom-in w-full h-full flex items-center justify-center group"
+                                title="คลิกเพื่อขยายดูภาพสลิปขนาดใหญ่"
+                              >
+                                <img
+                                  src={selectedInvoice.slip_image}
+                                  alt="Slip"
+                                  className="max-w-full max-h-[350px] object-contain rounded-xl transition-transform duration-200 group-hover:scale-[1.02]"
+                                />
+                                <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/25 transition-all rounded-xl flex items-center justify-center">
+                                  <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                                    คลิกขยายภาพใหญ่
+                                  </span>
+                                </div>
+                              </div>
                             ) : (
                               <div className="text-slate-400 flex flex-col items-center py-10">
                                 <span className="text-4xl mb-2 opacity-50">📸</span>
@@ -1000,7 +1264,7 @@ export default function InvoicesManagementPage() {
                 </div>
                 
                 <div className="p-6 overflow-y-auto flex-1 flex flex-col bg-white">
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-start mb-2">
                     <div>
                       <p className="text-sm text-slate-500 font-medium">บิลห้อง {selectedInvoice.room_number || '-'}</p>
                       <p className="text-2xl font-bold text-slate-800">{Number(selectedInvoice.total_amount).toLocaleString()} ฿</p>
@@ -1009,6 +1273,17 @@ export default function InvoicesManagementPage() {
                       {getStatusBadge(selectedInvoice)}
                     </div>
                   </div>
+
+                  {/* วันเวลาชำระเงินจริง */}
+                  {selectedInvoice.paid_at && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-600 mb-3">
+                      <span className="font-semibold text-slate-500">วันเวลาชำระเงิน:</span>
+                      <span className="font-bold text-slate-800 font-mono flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        {formatDateTime(selectedInvoice.paid_at)}
+                      </span>
+                    </div>
+                  )}
 
                   {selectedInvoice.status === 'draft' ? (
                     <div className="flex-1 flex flex-col items-center justify-center py-10">
@@ -1037,9 +1312,25 @@ export default function InvoicesManagementPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="bg-slate-100/50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center mb-6 relative min-h-[250px]">
+                      <div className="bg-slate-100/50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center mb-6 relative min-h-[250px] group">
                         {selectedInvoice.slip_image ? (
-                          <img src={selectedInvoice.slip_image} alt="Slip" className="max-w-full max-h-[350px] object-contain rounded-xl" />
+                          <div
+                            onClick={() => setLightboxImage(selectedInvoice.slip_image)}
+                            className="relative cursor-zoom-in w-full h-full flex items-center justify-center group"
+                            title="คลิกเพื่อขยายดูภาพสลิปขนาดใหญ่"
+                          >
+                            <img
+                              src={selectedInvoice.slip_image}
+                              alt="Slip"
+                              className="max-w-full max-h-[350px] object-contain rounded-xl transition-transform duration-200 group-hover:scale-[1.02]"
+                            />
+                            <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/25 transition-all rounded-xl flex items-center justify-center">
+                              <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                                คลิกขยายภาพใหญ่
+                              </span>
+                            </div>
+                          </div>
                         ) : (
                           <div className="text-slate-400 flex flex-col items-center py-10">
                             <span className="text-4xl mb-2 opacity-50">📸</span>
@@ -1142,6 +1433,42 @@ export default function InvoicesManagementPage() {
           )}
         </AdminLayout>
       </div>
+
+      {/* In-place Lightbox Modal for Slip Image */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none cursor-pointer"
+          onClick={() => setLightboxImage(null)}
+        >
+          {/* Close button X */}
+          <button
+            type="button"
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 w-11 h-11 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-full flex items-center justify-center transition-all z-10 cursor-pointer shadow-lg backdrop-blur-sm"
+            title="ปิด (Esc)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+
+          {/* Hint */}
+          <div className="absolute top-5 left-6 text-white/70 text-xs hidden sm:flex items-center gap-2 pointer-events-none">
+            <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] font-mono">ESC</span>
+            <span>กด Esc หรือแตะพื้นที่ว่างเพื่อปิด</span>
+          </div>
+
+          {/* Image Container */}
+          <div
+            className="relative max-w-4xl max-h-[90vh] w-auto h-auto flex items-center justify-center animate-in zoom-in-95 duration-200 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightboxImage}
+              alt="Enlarged Slip"
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Print Layout */}
       {invoiceToPrint && (
