@@ -82,6 +82,7 @@ export default function TenantDashboard() {
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [tenantFirstName, setTenantFirstName] = useState('');
     const [tenantLastName, setTenantLastName] = useState('');
+    const [tenantEmail, setTenantEmail] = useState('');
     const [tenantPhone, setTenantPhone] = useState('');
     const [tenantRoomNumber, setTenantRoomNumber] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -103,7 +104,7 @@ export default function TenantDashboard() {
             // 1. หา UUID (user_id) ในตาราง users
             const { data: userRecord, error: userError } = await supabase
                 .from('users')
-                .select('user_id, first_name, last_name, phone_number')
+                .select('user_id, first_name, last_name, phone_number, email')
                 .eq('user_uid', uid)
                 .single();
 
@@ -112,6 +113,9 @@ export default function TenantDashboard() {
             setTenantFirstName(userRecord.first_name || '');
             setTenantLastName(userRecord.last_name || '');
             setTenantPhone(userRecord.phone_number || '');
+            if (userRecord.email) {
+                setTenantEmail(userRecord.email);
+            }
             setUserName(`${userRecord.first_name || ''} ${userRecord.last_name || ''}`.trim());
 
             // 2. หาสัญญาเช่าปัจจุบัน และ Join ข้อมูลห้อง
@@ -254,7 +258,7 @@ export default function TenantDashboard() {
 
             const { data: userData } = await supabase
                 .from('users')
-                .select('role, first_name, last_name, phone_number')
+                .select('role, first_name, last_name, phone_number, email')
                 .eq('user_uid', session.user.id)
                 .single();
 
@@ -267,6 +271,7 @@ export default function TenantDashboard() {
             setTenantFirstName(userData.first_name || '');
             setTenantLastName(userData.last_name || '');
             setTenantPhone(userData.phone_number || '');
+            setTenantEmail(userData.email || session.user.email || '');
 
             const { data: settings } = await supabase
                 .from('dorm_settings')
@@ -1536,6 +1541,16 @@ export default function TenantDashboard() {
                                         type="text"
                                         disabled
                                         value={`${tenantFirstName} ${tenantLastName}`.trim() || userName || '-'}
+                                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-semibold cursor-not-allowed select-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">อีเมล</label>
+                                    <input
+                                        type="text"
+                                        disabled
+                                        value={tenantEmail || '-'}
                                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-semibold cursor-not-allowed select-none"
                                     />
                                 </div>

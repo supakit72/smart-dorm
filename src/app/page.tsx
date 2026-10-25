@@ -12,6 +12,7 @@ export default function AdminDashboard() {
   const [roomData, setRoomData] = useState<any[]>([]);
   const [allInvoices, setAllInvoices] = useState<any[]>([]);
   const [activeContracts, setActiveContracts] = useState<any[]>([]);
+  const [totalPendingMaintenanceCount, setTotalPendingMaintenanceCount] = useState(0);
 
   // Function to calculate cycle dates
   const getCycleDates = (cutoff: number) => {
@@ -94,6 +95,29 @@ export default function AdminDashboard() {
 
       setActiveContracts(contracts || []);
 
+      // 5. ดึงรายการแจ้งซ่อมที่ยังไม่เสร็จสิ้น (pending, in_progress) จากตาราง maintenance_requests
+      const { data: activeMaintenanceRequests, error: maintError } = await supabase
+        .from('maintenance_requests')
+        .select('maintenance_requests_id, room_id, issue_details, status, created_at')
+        .in('status', ['pending', 'in_progress']);
+
+      if (maintError) {
+        console.warn("Could not fetch maintenance requests:", maintError);
+      }
+
+      setTotalPendingMaintenanceCount(activeMaintenanceRequests?.length || 0);
+
+      // สร้าง Map รายการแจ้งซ่อมตาม room_id
+      const pendingMaintenanceMap = new Map<number, any[]>();
+      activeMaintenanceRequests?.forEach(m => {
+        if (m.room_id) {
+          const rId = Number(m.room_id);
+          const existing = pendingMaintenanceMap.get(rId) || [];
+          existing.push(m);
+          pendingMaintenanceMap.set(rId, existing);
+        }
+      });
+
       // คำนวณยอดบิลทุกรายการ
       const invoicesWithBreakdown = invoices?.map(inv => ({
         ...inv,
@@ -131,7 +155,11 @@ export default function AdminDashboard() {
         const roomNumStr = String(room.room_number);
         const hasActiveContract = activeRoomIds.has(roomIdNum) || activeContractsMap.has(roomNumStr);
         const hasUnpaidInvoice = unpaidRoomNumbers.has(roomNumStr);
-        const isMaintenance = room.status === 'maintenance' || room.status === 'แจ้งซ่อม';
+        const isMaintenance = room.status === 'maintenance' || room.status === 'ปิดปรับปรุง' || room.status === 'แจ้งซ่อม';
+
+        // ตรวจสอบว่าห้องนี้มีรายการแจ้งซ่อมค้างอยู่หรือไม่ (จากผู้เช่า)
+        const roomMaintList = pendingMaintenanceMap.get(roomIdNum) || [];
+        const hasMaintenanceAlert = roomMaintList.length > 0;
 
         let statusKey: 'vacant' | 'occupied' | 'unpaid' | 'maintenance' = 'vacant';
         let statusText = 'ว่าง';
@@ -141,10 +169,10 @@ export default function AdminDashboard() {
 
         if (isMaintenance) {
           statusKey = 'maintenance';
-          statusText = 'แจ้งซ่อม';
-          colorClass = 'bg-rose-500';
-          badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
-          cardBorder = 'hover:border-rose-300';
+          statusText = 'ปิดปรับปรุง';
+          colorClass = 'bg-slate-400';
+          badgeClass = 'bg-slate-100 text-slate-700 border-slate-300';
+          cardBorder = 'hover:border-slate-400';
         } else if (hasActiveContract && hasUnpaidInvoice) {
           statusKey = 'unpaid';
           statusText = 'รอชำระ';
@@ -172,7 +200,10 @@ export default function AdminDashboard() {
           color: colorClass,
           badgeClass,
           cardBorder,
-          contractInfo
+          contractInfo,
+          hasMaintenanceAlert,
+          maintenanceCount: roomMaintList.length,
+          maintenanceList: roomMaintList
         };
       }) || [];
 
@@ -394,8 +425,8 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* 2. KPI Cards (4 Cards Grid) */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+        {/* 2. KPI Cards (5 Cards Grid) */}
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
           {/* Card 1: Occupancy Rate */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs flex flex-col justify-between hover:shadow-md transition-all">
             <div className="flex justify-between items-start">
@@ -498,6 +529,36 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
+
+          {/* Card 5: Pending Maintenance (ผู้เช่าแจ้งซ่อม) */}
+          <Link
+            href="/maintenance"
+            className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs flex flex-col justify-between hover:shadow-md hover:border-amber-300 transition-all group col-span-2 sm:col-span-1"
+          >
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold text-slate-500">งานซ่อมค้างจัดการ</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                totalPendingMaintenanceCount > 0
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                  : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+              }`}>
+                {totalPendingMaintenanceCount > 0 ? 'รอจัดการ' : 'เรียบร้อย'}
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="flex items-baseline gap-1">
+                <span className={`text-2xl sm:text-3xl font-black ${
+                  totalPendingMaintenanceCount > 0 ? 'text-amber-600' : 'text-slate-800'
+                }`}>
+                  {totalPendingMaintenanceCount}
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-slate-500">รายการ</span>
+              </div>
+              <div className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 group-hover:text-amber-700 mt-2 transition-colors">
+                จัดการงานซ่อม <svg className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7" /></svg>
+              </div>
+            </div>
+          </Link>
         </section>
 
         {/* 3. Main Two-Column Layout */}
@@ -553,7 +614,13 @@ export default function AdminDashboard() {
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> รอชำระ
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> แจ้งซ่อม
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span> ปิดปรับปรุง
+              </span>
+              <span className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300">
+                  🔧 มีงานซ่อม
+                </span>
+                <span className="text-slate-400 font-normal hidden sm:inline">(ผู้เช่าแจ้ง)</span>
               </span>
             </div>
 
@@ -570,7 +637,18 @@ export default function AdminDashboard() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[11px] font-bold text-slate-400">ชั้น {room.floor}</span>
-                    <span className={`w-2.5 h-2.5 rounded-full ${room.color} shadow-2xs`}></span>
+                    <div className="flex items-center gap-1.5">
+                      {room.hasMaintenanceAlert && (
+                        <span 
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 shadow-2xs animate-pulse"
+                          title={`มีรายการแจ้งซ่อมค้างอยู่ ${room.maintenanceCount} รายการ`}
+                        >
+                          <span>🔧</span>
+                          <span className="hidden sm:inline">แจ้งซ่อม</span>
+                        </span>
+                      )}
+                      <span className={`w-2.5 h-2.5 rounded-full ${room.color} shadow-2xs`}></span>
+                    </div>
                   </div>
                   <div className="flex items-baseline justify-between">
                     <span className="text-xl font-black text-slate-800 tracking-tight">
@@ -732,6 +810,47 @@ export default function AdminDashboard() {
                 </span>
               </div>
 
+              {/* Maintenance Alert Warning Banner (If active maintenance requests exist) */}
+              {selectedRoom.hasMaintenanceAlert && (
+                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                      <span className="text-sm">🔧</span> มีรายการแจ้งซ่อมค้างจัดการ
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                      {selectedRoom.maintenanceCount} รายการ
+                    </span>
+                  </div>
+
+                  {/* List of pending issues */}
+                  <div className="space-y-1.5">
+                    {selectedRoom.maintenanceList.map((m: any, mIdx: number) => {
+                      const match = m.issue_details?.match(/^\[(.*?)\]\s*(.*)$/);
+                      const cat = match ? match[1] : 'ทั่วไป';
+                      const desc = match ? match[2] : m.issue_details;
+                      return (
+                        <div key={m.maintenance_requests_id || mIdx} className="bg-white/90 p-2.5 rounded-xl border border-amber-100 text-xs flex justify-between items-center gap-2 shadow-2xs">
+                          <span className="text-slate-700 font-medium truncate flex-1">
+                            <span className="font-bold text-amber-700">[{cat}]</span> {desc}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100/60 text-amber-700 border border-amber-200/60">
+                            {m.status === 'pending' ? 'รอดำเนินการ' : 'กำลังดำเนินการ'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <Link
+                    href={`/maintenance?room=${selectedRoom.number}`}
+                    className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-[0.98]"
+                  >
+                    <span>ดูรายการแจ้งซ่อมห้องนี้</span>
+                    <span>&rarr;</span>
+                  </Link>
+                </div>
+              )}
+
               {/* Active Contract & Tenant Info */}
               {selectedRoom.contractInfo ? (
                 <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 space-y-3">
@@ -781,26 +900,34 @@ export default function AdminDashboard() {
               )}
 
               {/* Action Buttons */}
-              <div className="pt-2 flex gap-2">
+              <div className="pt-2 flex flex-wrap gap-2">
+                {selectedRoom.hasMaintenanceAlert && (
+                  <Link
+                    href={`/maintenance?room=${selectedRoom.number}`}
+                    className="flex-1 min-w-[130px] py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span>🔧 แจ้งซ่อม ({selectedRoom.maintenanceCount})</span>
+                  </Link>
+                )}
                 {selectedRoom.statusKey === 'unpaid' && (
                   <Link
                     href="/invoices"
-                    className="flex-1 py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all"
+                    className="flex-1 min-w-[120px] py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all"
                   >
-                    ดูรายการบิลค้างชำระ
+                    ดูบิลรอชำระ
                   </Link>
                 )}
                 {selectedRoom.statusKey === 'maintenance' && (
                   <Link
-                    href="/maintenance"
-                    className="flex-1 py-2.5 px-4 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all"
+                    href="/rooms"
+                    className="flex-1 min-w-[130px] py-2.5 px-4 bg-slate-600 hover:bg-slate-700 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all"
                   >
-                    ดูรายการแจ้งซ่อม
+                    จัดการห้องปิดปรับปรุง
                   </Link>
                 )}
                 <button
                   onClick={() => setIsRoomModalOpen(false)}
-                  className="flex-1 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all"
+                  className="flex-1 min-w-[80px] py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl text-center shadow-xs transition-all cursor-pointer"
                 >
                   ปิด
                 </button>

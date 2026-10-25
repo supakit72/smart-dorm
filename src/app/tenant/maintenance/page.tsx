@@ -12,13 +12,39 @@ export default function MaintenanceRequest() {
     const [activeTab, setActiveTab] = useState<'form' | 'history'>('form');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [userId, setUserId] = useState<number | null>(null);
+    const [userUid, setUserUid] = useState<string | null>(null);
     const [roomId, setRoomId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
+    const [requestToCancel, setRequestToCancel] = useState<any | null>(null);
+    const [isCanceling, setIsCanceling] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
+
+    const fetchHistory = async (uId: number, authUid?: string | null) => {
+        try {
+            let query = supabase
+                .from('maintenance_requests')
+                .select('*');
+
+            if (authUid) {
+                query = query.or(`tenant_id.eq.${uId},tenant_uid.eq.${authUid}`);
+            } else {
+                query = query.eq('tenant_id', uId);
+            }
+
+            const { data: historyData, error } = await query.order('created_at', { ascending: false });
+            if (error) {
+                console.error("Fetch history error:", error);
+                return;
+            }
+            if (historyData) setMaintenanceHistory(historyData);
+        } catch (err) {
+            console.error("Error fetching maintenance history:", err);
+        }
+    };
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -28,6 +54,8 @@ export default function MaintenanceRequest() {
                     router.push('/login');
                     return;
                 }
+
+                setUserUid(session.user.id);
 
                 const { data: userData } = await supabase
                     .from('users')
@@ -57,13 +85,7 @@ export default function MaintenanceRequest() {
                     return;
                 }
 
-                const { data: historyData } = await supabase
-                    .from('maintenance_requests')
-                    .select('*')
-                    .eq('tenant_id', userData.user_id)
-                    .order('created_at', { ascending: false });
-                
-                if (historyData) setMaintenanceHistory(historyData);
+                await fetchHistory(userData.user_id, session.user.id);
 
             } catch (err) {
                 console.error("Error fetching user data:", err);
@@ -122,6 +144,7 @@ export default function MaintenanceRequest() {
                     {
                         room_id: roomId,
                         tenant_id: userId,
+                        tenant_uid: userUid,
                         issue_details: fullIssueDetails,
                         status: 'pending',
                         photo_url: photoUrl
@@ -138,12 +161,7 @@ export default function MaintenanceRequest() {
             setPreviewUrl(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
             
-            const { data: historyData } = await supabase
-                .from('maintenance_requests')
-                .select('*')
-                .eq('tenant_id', userId)
-                .order('created_at', { ascending: false });
-            if (historyData) setMaintenanceHistory(historyData);
+            await fetchHistory(userId, userUid);
 
             setActiveTab('history');
 
@@ -152,6 +170,29 @@ export default function MaintenanceRequest() {
             alert("เกิดข้อผิดพลาดในการส่งเรื่อง: " + (err.message || "กรุณาลองใหม่อีกครั้ง"));
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleCancelRequest = async () => {
+        if (!requestToCancel) return;
+        try {
+            setIsCanceling(true);
+            const { error } = await supabase
+                .from('maintenance_requests')
+                .delete()
+                .eq('maintenance_requests_id', requestToCancel.maintenance_requests_id);
+
+            if (error) throw error;
+
+            if (userId) {
+                await fetchHistory(userId, userUid);
+            }
+            setRequestToCancel(null);
+        } catch (err: any) {
+            console.error("Cancel maintenance request error:", err);
+            alert("เกิดข้อผิดพลาดในการยกเลิกคำขอ: " + (err.message || "กรุณาลองใหม่อีกครั้ง"));
+        } finally {
+            setIsCanceling(false);
         }
     };
 
@@ -376,6 +417,21 @@ export default function MaintenanceRequest() {
                                                         </div>
                                                     </div>
                                                 </div>
+
+                                                {/* Cancel Request Button (Visible only when status is 'pending') */}
+                                                {item.status === 'pending' && (
+                                                    <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                                        <span className="text-[11px] text-slate-400 font-medium">ยังไม่เริ่มดำเนินการ</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setRequestToCancel(item)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                                            ยกเลิกคำขอ
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })
@@ -391,6 +447,60 @@ export default function MaintenanceRequest() {
                     </>
                 )}
             </main>
+
+            {/* Cancel Confirmation Modal */}
+            {requestToCancel && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in transition-opacity"
+                        onClick={() => !isCanceling && setRequestToCancel(null)}
+                    />
+                    
+                    <div className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 z-10 animate-in zoom-in-95 duration-200">
+                        <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 border border-rose-100 flex items-center justify-center text-2xl mb-4 mx-auto">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </div>
+                        
+                        <h3 className="text-base sm:text-lg font-black text-slate-800 text-center mb-1.5">
+                            ยกเลิกคำขอแจ้งซ่อม
+                        </h3>
+                        
+                        <p className="text-xs sm:text-sm text-slate-500 text-center mb-4 leading-relaxed">
+                            คุณต้องการยกเลิกคำขอแจ้งซ่อมนี้ใช่หรือไม่?
+                        </p>
+
+                        <div className="bg-slate-50 rounded-2xl p-3.5 mb-5 border border-slate-100 text-xs text-slate-600">
+                            <span className="font-bold text-slate-700">รายการ:</span> <span className="line-clamp-2">{requestToCancel.issue_details}</span>
+                        </div>
+
+                        <div className="flex gap-2.5">
+                            <button
+                                type="button"
+                                onClick={() => setRequestToCancel(null)}
+                                disabled={isCanceling}
+                                className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                                ไม่ยกเลิก
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancelRequest}
+                                disabled={isCanceling}
+                                className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                {isCanceling ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                        กำลังยกเลิก...
+                                    </>
+                                ) : (
+                                    'ยืนยันยกเลิก'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

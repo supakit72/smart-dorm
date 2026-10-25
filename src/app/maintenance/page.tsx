@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/backend/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
+import * as XLSX from 'xlsx';
 
 export default function MaintenancePage() {
   const [loading, setLoading] = useState(true);
@@ -17,11 +18,39 @@ export default function MaintenancePage() {
   // Mobile Tab State
   const [mobileTab, setMobileTab] = useState<'pending' | 'in_progress' | 'resolved'>('pending');
 
-  // Modal
+  // Pagination states (5 items per page)
+  const [pagePending, setPagePending] = useState(1);
+  const [pageInProgress, setPageInProgress] = useState(1);
+  const [pageResolved, setPageResolved] = useState(1);
+  const itemsPerPage = 5;
+
+  // Photo Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
+  // Delete Modal
+  const [requestToDelete, setRequestToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const router = useRouter();
+
+  // Reset pagination to page 1 when search query or mobile tab changes
+  useEffect(() => {
+    setPagePending(1);
+    setPageInProgress(1);
+    setPageResolved(1);
+  }, [searchQuery, mobileTab]);
+
+  // Read initial search query from URL (e.g. /maintenance?room=101 or ?search=101)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const queryParam = params.get('room') || params.get('search');
+      if (queryParam) {
+        setSearchQuery(queryParam);
+      }
+    }
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -106,6 +135,34 @@ export default function MaintenancePage() {
     }
   };
 
+  const handleDeleteRequest = async () => {
+    if (!requestToDelete) return;
+    try {
+      setIsDeleting(true);
+      const idToDelete = requestToDelete.maintenance_requests_id;
+
+      // Optimistic update
+      setMaintenanceRequests(prev => prev.filter(req => req.maintenance_requests_id !== idToDelete));
+
+      const { error: deleteError } = await supabase
+        .from('maintenance_requests')
+        .delete()
+        .eq('maintenance_requests_id', idToDelete);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      setRequestToDelete(null);
+    } catch (err: any) {
+      console.error("Delete Maintenance Request Error:", err);
+      alert("เกิดข้อผิดพลาดในการลบรายการแจ้งซ่อม: " + (err.message || "กรุณาลองใหม่อีกครั้ง"));
+      fetchData();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const formatDateThai = (dateString?: string) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -119,10 +176,183 @@ export default function MaintenancePage() {
     return date.toLocaleDateString('th-TH', options);
   };
 
+  // Export to Excel function
+  const handleExportExcel = () => {
+    if (!filteredRequests || filteredRequests.length === 0) {
+      alert('ไม่พบข้อมูลรายการแจ้งซ่อมสำหรับส่งออก');
+      return;
+    }
+
+    const formatDateTimeForExcel = (dateString?: string) => {
+      if (!dateString) return '-';
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return dateString;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    };
+
+    const statusMap: Record<string, string> = {
+      pending: 'รอดำเนินการ',
+      in_progress: 'กำลังดำเนินการ',
+      resolved: 'เสร็จสิ้น'
+    };
+
+    const exportData = filteredRequests.map(req => {
+      const match = req.issue_details?.match(/^\[(.*?)\]\s*(.*)$/);
+      const category = match ? match[1] : 'ทั่วไป';
+      const detail = match ? match[2] : (req.issue_details || '-');
+      const tenantName = `${req.first_name || ''} ${req.last_name || ''}`.trim() || '-';
+      const thStatus = statusMap[req.status] || req.status || '-';
+
+      return {
+        'วันที่แจ้ง': formatDateTimeForExcel(req.created_at),
+        'เลขห้อง': req.room_number ? `ห้อง ${req.room_number}` : '-',
+        'ชื่อผู้เช่า': tenantName,
+        'เบอร์โทรศัพท์': req.phone_number || '-',
+        'หมวดหมู่งานซ่อม': category,
+        'รายละเอียดปัญหา': detail,
+        'สถานะปัจจุบัน': thStatus
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Auto-size columns for clear readability
+    worksheet['!cols'] = [
+      { wch: 18 }, // วันที่แจ้ง (DD/MM/YYYY HH:mm)
+      { wch: 12 }, // เลขห้อง
+      { wch: 22 }, // ชื่อผู้เช่า
+      { wch: 15 }, // เบอร์โทรศัพท์
+      { wch: 16 }, // หมวดหมู่งานซ่อม
+      { wch: 40 }, // รายละเอียดปัญหา
+      { wch: 16 }, // สถานะปัจจุบัน
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Maintenance");
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `maintenance_report_${dateStr}.xlsx`);
+  };
+
   // Grouped lists for Kanban
   const pendingList = filteredRequests.filter(req => req.status === 'pending');
   const inProgressList = filteredRequests.filter(req => req.status === 'in_progress');
   const resolvedList = filteredRequests.filter(req => req.status === 'resolved');
+
+  // Pagination calculations (5 items per page)
+  const totalPendingPages = Math.ceil(pendingList.length / itemsPerPage) || 1;
+  const paginatedPending = pendingList.slice((pagePending - 1) * itemsPerPage, pagePending * itemsPerPage);
+
+  const totalInProgressPages = Math.ceil(inProgressList.length / itemsPerPage) || 1;
+  const paginatedInProgress = inProgressList.slice((pageInProgress - 1) * itemsPerPage, pageInProgress * itemsPerPage);
+
+  const totalResolvedPages = Math.ceil(resolvedList.length / itemsPerPage) || 1;
+  const paginatedResolved = resolvedList.slice((pageResolved - 1) * itemsPerPage, pageResolved * itemsPerPage);
+
+  // Safe page boundary
+  useEffect(() => {
+    if (pagePending > totalPendingPages) setPagePending(totalPendingPages);
+    if (pageInProgress > totalInProgressPages) setPageInProgress(totalInProgressPages);
+    if (pageResolved > totalResolvedPages) setPageResolved(totalResolvedPages);
+  }, [totalPendingPages, totalInProgressPages, totalResolvedPages, pagePending, pageInProgress, pageResolved]);
+
+  // Pagination Controls Component
+  const PaginationControls = ({
+    currentPage,
+    totalPages,
+    onPageChange,
+    totalItems,
+    colorTheme = 'blue'
+  }: {
+    currentPage: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+    totalItems: number;
+    colorTheme?: 'amber' | 'blue' | 'emerald';
+  }) => {
+    if (totalPages <= 1) return null;
+
+    const activeColor = 
+      colorTheme === 'amber' ? 'bg-amber-600 text-white shadow-amber-600/30 ring-2 ring-amber-500/20' :
+      colorTheme === 'emerald' ? 'bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-500/20' :
+      'bg-blue-600 text-white shadow-blue-600/30 ring-2 ring-blue-500/20';
+
+    const getPages = () => {
+      const pages: (number | string)[] = [];
+      if (totalPages <= 5) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        if (currentPage <= 3) {
+          pages.push(1, 2, 3, '...', totalPages);
+        } else if (currentPage >= totalPages - 2) {
+          pages.push(1, '...', totalPages - 2, totalPages - 1, totalPages);
+        } else {
+          pages.push(1, '...', currentPage, '...', totalPages);
+        }
+      }
+      return pages;
+    };
+
+    return (
+      <div className="flex items-center justify-between pt-3 pb-1 border-t border-slate-200/80 mt-2 px-1 text-xs">
+        <span className="text-[11px] font-bold text-slate-500">
+          หน้า <span className="text-slate-800">{currentPage}</span>/{totalPages}
+          <span className="hidden sm:inline text-slate-400 font-normal"> ({totalItems} รายการ)</span>
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-black text-xs shadow-xs"
+            title="หน้าก่อนหน้า"
+          >
+            &lt;
+          </button>
+
+          {getPages().map((page, idx) => {
+            if (page === '...') {
+              return (
+                <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 select-none text-xs">
+                  ...
+                </span>
+              );
+            }
+            const isCurrent = page === currentPage;
+            return (
+              <button
+                key={`page-${page}`}
+                type="button"
+                onClick={() => onPageChange(Number(page))}
+                className={`min-w-[28px] h-7 px-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center shadow-xs ${
+                  isCurrent
+                    ? `${activeColor} shadow-sm`
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {page}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-black text-xs shadow-xs"
+            title="หน้าถัดไป"
+          >
+            &gt;
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // Kanban Card Component
   const MaintenanceCard = ({ req, isMobile = false }: { req: any, isMobile?: boolean }) => {
@@ -149,10 +379,21 @@ export default function MaintenancePage() {
             </span>
             <h4 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Room {req.room_number || '-'}</h4>
           </div>
-          <div className="text-right">
+          <div className="flex items-center gap-1.5">
             <span className="text-[10px] sm:text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md font-medium border border-slate-200/50">
               {formatDateThai(req.created_at)}
             </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRequestToDelete(req);
+              }}
+              title="ลบรายการแจ้งซ่อม"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all active:scale-95 cursor-pointer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
           </div>
         </div>
 
@@ -241,14 +482,15 @@ export default function MaintenancePage() {
               </span>
               รายการแจ้งซ่อม
             </h1>
-            <div className="flex gap-3 mt-3">
+            <div className="flex gap-2.5 sm:gap-3 mt-3 flex-wrap">
               <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-amber-50 text-amber-600 border border-amber-100">รอซ่อม {pendingList.length}</span>
               <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-blue-50 text-blue-600 border border-blue-100">กำลังซ่อม {inProgressList.length}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">เสร็จสิ้น {resolvedList.length}</span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <div className="relative w-full sm:w-64">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 sm:w-64">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               </div>
@@ -260,6 +502,17 @@ export default function MaintenancePage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all placeholder:text-slate-400"
               />
             </div>
+
+            {/* Export Excel Button */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer shrink-0"
+              title="ส่งออกรายงานเป็น Excel (.xlsx)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span>ส่งออก Excel</span>
+            </button>
           </div>
         </div>
 
@@ -291,7 +544,12 @@ export default function MaintenancePage() {
                 {pendingList.length === 0 ? (
                   <div className="py-10 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/30 text-slate-400 text-sm font-medium">ไม่มีรายการรอดำเนินการ</div>
                 ) : (
-                  pendingList.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} />)
+                  <div className="flex flex-col gap-3">
+                    {paginatedPending.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} />)}
+                    <div className="bg-white px-3 py-2 rounded-2xl border border-slate-200/60 shadow-xs">
+                      <PaginationControls currentPage={pagePending} totalPages={totalPendingPages} onPageChange={setPagePending} totalItems={pendingList.length} colorTheme="amber" />
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -307,7 +565,12 @@ export default function MaintenancePage() {
                 {inProgressList.length === 0 ? (
                   <div className="py-10 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/30 text-slate-400 text-sm font-medium">ไม่มีรายการที่กำลังดำเนินการ</div>
                 ) : (
-                  inProgressList.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} />)
+                  <div className="flex flex-col gap-3">
+                    {paginatedInProgress.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} />)}
+                    <div className="bg-white px-3 py-2 rounded-2xl border border-slate-200/60 shadow-xs">
+                      <PaginationControls currentPage={pageInProgress} totalPages={totalInProgressPages} onPageChange={setPageInProgress} totalItems={inProgressList.length} colorTheme="blue" />
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -323,13 +586,18 @@ export default function MaintenancePage() {
                 {resolvedList.length === 0 ? (
                   <div className="py-10 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/30 text-slate-400 text-sm font-medium">ไม่มีรายการที่เสร็จสิ้น</div>
                 ) : (
-                  resolvedList.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} />)
+                  <div className="flex flex-col gap-3">
+                    {paginatedResolved.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} />)}
+                    <div className="bg-white px-3 py-2 rounded-2xl border border-slate-200/60 shadow-xs">
+                      <PaginationControls currentPage={pageResolved} totalPages={totalResolvedPages} onPageChange={setPageResolved} totalItems={resolvedList.length} colorTheme="emerald" />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Mobile View (Tab Switcher) */}
-            <div className="md:hidden space-y-5">
+            <div className="md:hidden space-y-5 pb-8">
               <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200/60 shadow-inner overflow-x-auto hide-scrollbar">
                 <button 
                   onClick={() => setMobileTab('pending')} 
@@ -352,20 +620,50 @@ export default function MaintenancePage() {
               </div>
 
               <div className="flex flex-col gap-4">
-                {mobileTab === 'pending' && pendingList.length === 0 && (
-                   <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50 text-slate-400 font-medium">ไม่มีรายการรอดำเนินการ</div>
+                {mobileTab === 'pending' && (
+                  <>
+                    {pendingList.length === 0 ? (
+                      <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50 text-slate-400 font-medium">ไม่มีรายการรอดำเนินการ</div>
+                    ) : (
+                      <>
+                        {paginatedPending.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} isMobile />)}
+                        <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200/60 shadow-xs">
+                          <PaginationControls currentPage={pagePending} totalPages={totalPendingPages} onPageChange={setPagePending} totalItems={pendingList.length} colorTheme="amber" />
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
-                {mobileTab === 'pending' && pendingList.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} isMobile />)}
 
-                {mobileTab === 'in_progress' && inProgressList.length === 0 && (
-                   <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50 text-slate-400 font-medium">ไม่มีรายการที่กำลังดำเนินการ</div>
+                {mobileTab === 'in_progress' && (
+                  <>
+                    {inProgressList.length === 0 ? (
+                      <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50 text-slate-400 font-medium">ไม่มีรายการที่กำลังดำเนินการ</div>
+                    ) : (
+                      <>
+                        {paginatedInProgress.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} isMobile />)}
+                        <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200/60 shadow-xs">
+                          <PaginationControls currentPage={pageInProgress} totalPages={totalInProgressPages} onPageChange={setPageInProgress} totalItems={inProgressList.length} colorTheme="blue" />
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
-                {mobileTab === 'in_progress' && inProgressList.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} isMobile />)}
 
-                {mobileTab === 'resolved' && resolvedList.length === 0 && (
-                   <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50 text-slate-400 font-medium">ไม่มีรายการที่เสร็จสิ้น</div>
+                {mobileTab === 'resolved' && (
+                  <>
+                    {resolvedList.length === 0 ? (
+                      <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50 text-slate-400 font-medium">ไม่มีรายการที่เสร็จสิ้น</div>
+                    ) : (
+                      <>
+                        {paginatedResolved.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} isMobile />)}
+                        <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200/60 shadow-xs">
+                          <PaginationControls currentPage={pageResolved} totalPages={totalResolvedPages} onPageChange={setPageResolved} totalItems={resolvedList.length} colorTheme="emerald" />
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
-                {mobileTab === 'resolved' && resolvedList.map(req => <MaintenanceCard key={req.maintenance_requests_id} req={req} isMobile />)}
               </div>
             </div>
           </>
@@ -398,6 +696,61 @@ export default function MaintenancePage() {
                   <p className="font-medium">ไม่พบรูปภาพ</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {requestToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in transition-opacity" 
+            onClick={() => !isDeleting && setRequestToDelete(null)}
+          />
+          <div className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 z-10 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 border border-rose-100 flex items-center justify-center text-2xl mb-4 mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </div>
+
+            <h3 className="text-base sm:text-lg font-black text-slate-800 text-center mb-1.5">
+              ยืนยันการลบรายการแจ้งซ่อม
+            </h3>
+
+            <p className="text-xs sm:text-sm text-slate-500 text-center mb-4 leading-relaxed">
+              คุณแน่ใจหรือไม่ว่าต้องการลบรายการแจ้งซ่อมนี้ออกจากระบบ? ข้อมูลที่ลบจะไม่สามารถกู้คืนได้
+            </p>
+
+            <div className="bg-slate-50 rounded-2xl p-3.5 mb-5 border border-slate-100 text-xs text-slate-600 space-y-1">
+              <div><span className="font-bold text-slate-700">ห้องพัก:</span> ห้อง {requestToDelete.room_number || '-'}</div>
+              <div><span className="font-bold text-slate-700">ผู้แจ้ง:</span> {requestToDelete.first_name} {requestToDelete.last_name}</div>
+              <div className="line-clamp-2"><span className="font-bold text-slate-700">ปัญหา:</span> {requestToDelete.issue_details}</div>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setRequestToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteRequest}
+                disabled={isDeleting}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    กำลังลบ...
+                  </>
+                ) : (
+                  'ยืนยันลบ'
+                )}
+              </button>
             </div>
           </div>
         </div>
